@@ -139,10 +139,14 @@ class ParallelMLP(torch.nn.Module):
             self.register_parameter('bias', None)
 
         # Select the forward function for the operating mode.
-        self.forward_fn = (
-            self.parallel_forward_once if
-            args.moe_expert_model_parallelism else
-            self.forward_once)
+        if self.args.moe_expert_choice_grouped:
+            self.forward = self.forward_ec_grouped
+        if self.args.moe_expert_choice:
+            self.forward = self.forward_ec
+        elif args.moe_expert_model_parallelism:
+            self.forward_fn = self.parallel_forward_once
+        else:
+            self.forward_fn = self.forward_once
 
     def expert_capacity(self, tokens):
         world_size = mpu.get_expert_parallel_world_size(self.args)
@@ -171,6 +175,11 @@ class ParallelMLP(torch.nn.Module):
         # prior? Could we place the `torch.max` operation to return
         # 32-bit expert indices?
         top_expert = top_expert.int()
+        # bin_ids is sorted list of expert ids
+        # e.g. if top_expert is [0,1,0] bin_ids is [0,0,1]
+        # indices is the expert indices of the bin_ids 
+        # e.g. for the above it'd be [0,2,1]
+        # Both are of shape [sl * bs * topk]        
         bin_ids, indices = ops.sort(top_expert, self.sort_end_bit)
 
         # Histogram the expert ids to identify the number of
@@ -179,9 +188,12 @@ class ParallelMLP(torch.nn.Module):
         # TODO(tgale): Does the sorted data produce a more favorable
         # data distribution for histogram? Or is the op parallelism
         # worth more?
+        # tokens_per_expert is the number of tokens assigned to each expert
+        # shape [num_experts] e.g. for the above example it'd be [2,1]
         tokens_per_expert = ops.histogram(top_expert, self.num_experts)
 
         # Calculate the bin bounds for the sorted tokens.
+        # bins becomes the cumulative sum of tokens_per_expert e.g. for above example it'd be [2,3]
         bins = ops.inclusive_cumsum(tokens_per_expert, 0)
         bins = bins.view(1) if not len(bins.size()) else bins
         return indices, bin_ids, bins, tokens_per_expert
@@ -197,12 +209,16 @@ class ParallelMLP(torch.nn.Module):
             expert_capacity,
             top_k):
         # Route the tokens for MoE computation.
-        x = x.view(-1, x.shape[-1])
+        x = x.view(-1, x.shape[-1]) # [bs * sl, hs]
+        # Permutes the tokens based on the expert indices
+        # x shape: [num_experts, exp capacity, hid_dim]
+        # exp capacity includes topk i.e. topk * mbs * sl / num_experts
         x = ops.binned_gather(
             x, indices, bins, expert_capacity, top_k)
 
         # Perform the expert computation. Note that we don't
         # use biases for these linear operations.
+        # mlp.w1.shape: [num_experts, hid_dim, ffn_dim]
         x = self.mlp(x)
 
         # Un-route the data for the MoE output.
@@ -210,7 +226,7 @@ class ParallelMLP(torch.nn.Module):
             x, indices, expert_weights, bins, top_k)
 
     def forward_once(self, x, expert_weights, top_experts):
-        # x: [sl, bs, hs]
+        # x: [bs, sl, hs]
         # expert_weights: [sl * bs, top-k]
         # top_experts: [sl * bs, top-k]
         expert_weights = expert_weights.flatten()
@@ -221,7 +237,8 @@ class ParallelMLP(torch.nn.Module):
 
             # If expert_capacity is set to zero, set the number of tokens
             # per expert to the maximum we need to avoid dropping tokens.
-            sl, bs, hs = x.size()
+            # Usually expert capacity is >0 and tokens are dropped!
+            bs, sl, hs = x.size()
             expert_capacity = self.expert_capacity(sl * bs)
             if expert_capacity == 0:
                 expert_capacity = torch.max(tokens_per_expert).item()
@@ -442,6 +459,47 @@ class ParallelMLP(torch.nn.Module):
             return x + self.bias
         return x
 
+    def forward_ec_grouped(self, x, scores, expert_weights, top_experts):
+        bs, sl, hs = x.shape
+        num_experts, k = expert_weights.shape
+
+        x = x.flatten(start_dim=0, end_dim=1)
+        x = torch.index_select(x, dim=0, index=top_experts.flatten())
+        x = x.reshape((num_experts, k, hs))
+        x = self.mlp(x)
+        x = torch.einsum("ekd,ek->ekd", x, expert_weights)
+        x = x.flatten(start_dim=0, end_dim=1)
+        z = torch.zeros((bs * sl, hs)).type(x.type()).to(x.device)
+        z.index_add_(dim=0, index=top_experts.flatten().to(int), source=x)
+        x = z.reshape((bs, sl, hs))
+        return x
+
+    def forward_ec(self, x, scores, expert_weights, top_experts):
+        """
+        Expert choice forward func
+        sl = sequence length
+        bs = batch size
+        hs = hidden size
+        k = expert capacity
+        Refs:
+        - https://arxiv.org/pdf/2202.09368
+        - https://github.com/google/flaxformer/blob/main/flaxformer/architectures/moe/routing.py#L647-L717
+        - https://github.com/google/flaxformer/blob/399ea3a85e9807ada653fd0de1a9de627eb0acde/flaxformer/architectures/moe/moe_layers.py#L361
+        - https://github.com/microsoft/DeepSpeed/issues/2517
+        """
+        bs, sl, hs = x.shape
+        _, num_experts, k = expert_weights.shape
+        # [bs, num_experts, k, sl]
+        expert_gather_indices = torch.nn.functional.one_hot(top_experts, num_classes=sl).to(x.dtype)
+        # [bs, sl, num_experts, k]
+        expert_gather_indices = torch.moveaxis(expert_gather_indices, 3, 1)
+        x_in = torch.einsum('bs...,bsek->bek...', x, expert_gather_indices)
+        x_in = x_in.permute(1, 0, 2, 3).reshape(num_experts, bs * k, hs)
+        x_e = self.mlp(x_in) # [num_experts, bs*k, d]
+        combine_array = torch.einsum('...ek,...sek->...sek', expert_weights, expert_gather_indices)
+        x_e = x_e.reshape(num_experts, bs, k, hs).permute(1, 0, 2, 3)
+        x_out = torch.einsum('bek...,bsek->bs...', x_e, combine_array)
+        return x_out                
 
 class MoE(torch.nn.Module):
 

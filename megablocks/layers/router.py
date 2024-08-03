@@ -56,15 +56,18 @@ class LearnedRouter(torch.nn.Module):
             # Get probability for each token
             bs, sq, _ = x.shape
             capacity = self.args.moe_top_k # Use top k as the capacity to match regular MoEs
-            scores = self.layer(x).softmax(dim=-1) # [batch_size, seq_len, num_experts]
+            logits = self.layer(x)
+            scores = logits.softmax(dim=-1) # [batch_size, seq_len, num_experts]
             expert_weights, expert_indices = torch.topk(scores.transpose(1,2), (capacity * sq) // self.args.moe_num_experts, dim=-1) # [batch_size, num_experts, k]
         elif self.args.moe_expert_choice_grouped:
             bs, sq, _ = x.shape
             capacity = self.args.moe_top_k # Use top k as the capacity to match regular MoEs
-            scores = self.layer(x.view(-1, x.shape[-1])).softmax(dim=-1) # [bs & sq, num_experts]
+            logits = self.layer(x.view(-1, x.shape[-1])) # [bs & sq, num_experts]
+            scores = logits.softmax(dim=-1)
             expert_weights, expert_indices = torch.topk(scores.transpose(0,1),  (capacity * bs * sq) // self.args.moe_num_experts, dim=-1) # [num_experts, k]
         else:
-            scores = self.layer(x.view(-1, x.shape[-1])).softmax(dim=-1)
+            logits = self.layer(x.view(-1, x.shape[-1]))
+            scores = logits.softmax(dim=-1)
             expert_weights, expert_indices = self._top_k(scores)
 
         if self.args.moe_normalize_expert_weights:

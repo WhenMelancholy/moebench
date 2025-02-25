@@ -1,3 +1,7 @@
+#!/bin/bash
+set -e
+
+conda install nvidia/label/cuda-12.1.1::cuda-cudart-dev nvidia/label/cuda-12.1.1::cuda-toolkit nvidia/label/cuda-12.1.1::libcublas-dev nvidia/label/cuda-12.1.1::libcufft-dev nvidia/label/cuda-12.1.1::libcurand-dev nvidia/label/cuda-12.1.1::libcusolver-dev nvidia/label/cuda-12.1.1::libcusparse-dev --yes
 pip install --upgrade pip "setuptools<70.0.0" wheel
 # TODO, unpin setuptools when this issue in flash attention is resolved
 pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cu121

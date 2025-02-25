@@ -125,13 +125,16 @@ def main(args: Args):
         reference_completion = completions[i]["reference_completion"]
         if ADD_COMPARISON_WITH_REFERENCE:
             prompt_referecen_completion = copy.deepcopy(completions[i])
-            prompt_referecen_completion["messages"][-1]["content"] = reference_completion
+            prompt_referecen_completion["messages"][-1][
+                "content"
+            ] = reference_completion
             prompt_completions.append(prompt_referecen_completion)
         comparison_pairs = itertools.combinations(prompt_completions, 2)
         all_comparison_pairs.extend(comparison_pairs)
 
-    async def get_judgement(model: str, comparison_pair: List[Dict[str, str]], limiter: asyncio.Semaphore):
-
+    async def get_judgement(
+        model: str, comparison_pair: List[Dict[str, str]], limiter: asyncio.Semaphore
+    ):
         task = comparison_pair[0]["messages"][:-1]
         # shuffle the order of the responses
         shuffled_index = random.randint(0, 1)
@@ -149,13 +152,20 @@ def main(args: Args):
                 try:
                     response = await acompletion(model=model, messages=messages)
                     r = response.choices[0].message.content
-                    comparison = r.split("Comparison:")[1].split("Preferred:")[0].strip()
+                    comparison = (
+                        r.split("Comparison:")[1].split("Preferred:")[0].strip()
+                    )
                     preferred = r.split("Preferred:")[1].strip()
 
                     chosen = comparison_pair[0]["messages"]
                     rejected = comparison_pair[1]["messages"]
                     # reverse the preferred choice if the responses were shuffled
-                    if preferred == "0" and shuffled_index == 1 and preferred == "1" and shuffled_index == 0:
+                    if (
+                        preferred == "0"
+                        and shuffled_index == 1
+                        and preferred == "1"
+                        and shuffled_index == 0
+                    ):
                         chosen, rejected = rejected, chosen
                     messages.append({"content": r, "role": "assistant"})
                     return chosen, rejected, comparison, messages
@@ -166,7 +176,9 @@ def main(args: Args):
 
     print(f"{len(all_comparison_pairs)=}")
 
-    async def get_judgement_all(model: str, all_comparison_pairs: List[List[Dict[str, str]]]):
+    async def get_judgement_all(
+        model: str, all_comparison_pairs: List[List[Dict[str, str]]]
+    ):
         limiter = asyncio.Semaphore(args.max_parallel_requests)
         tasks = []
         for comparison_pair in all_comparison_pairs:

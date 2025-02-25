@@ -15,11 +15,11 @@
 
 
 import itertools
+import logging
 from collections import OrderedDict, defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import List, Literal, Optional, Tuple, Union
-import logging
 
 try:
     import deepspeed
@@ -45,7 +45,6 @@ from open_instruct.ground_truth_utils import (
     verify_math_sample,
 )
 from open_instruct.utils import retry_on_exception
-
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +145,9 @@ def first_true_indices(bools: torch.Tensor, dtype=torch.long) -> torch.Tensor:
     # for each row. Shape: (sequence_length,)
     # zero_or_index: Shape (batch_size, sequence_length). This tensor contains the indices for `True` values and `row_len`
     # for `False` values.
-    zero_or_index = row_len * (~bools).type(dtype) + torch.arange(row_len, dtype=dtype, device=bools.device)
+    zero_or_index = row_len * (~bools).type(dtype) + torch.arange(
+        row_len, dtype=dtype, device=bools.device
+    )
 
     # Return the minimum value in each row (i.e., the first `True` index or `row_len` if none exist)
     # torch.min(zero_or_index, dim=-1).values: This returns the minimum value in each row, which corresponds to the first
@@ -156,7 +157,10 @@ def first_true_indices(bools: torch.Tensor, dtype=torch.long) -> torch.Tensor:
 
 
 def get_reward(
-    model: torch.nn.Module, query_responses: torch.Tensor, pad_token_id: int, context_length: int
+    model: torch.nn.Module,
+    query_responses: torch.Tensor,
+    pad_token_id: int,
+    context_length: int,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     This function computes reward scores for a batch of query responses based on a pre-trained reward model.
@@ -200,11 +204,17 @@ def get_reward(
         output_hidden_states=True,
         use_cache=False,  # otherwise mistral-based RM would error out
     )
-    reward_logits = model.score(output.hidden_states[-1])  # (batch_size, sequence_length)
+    reward_logits = model.score(
+        output.hidden_states[-1]
+    )  # (batch_size, sequence_length)
 
     # Calculate the length of each sequence by finding the first occurrence of a padding token after the context
     # sequence_lengths shape: (batch_size,)
-    sequence_lengths = first_true_indices(query_responses[:, context_length:] == pad_token_id) - 1 + context_length
+    sequence_lengths = (
+        first_true_indices(query_responses[:, context_length:] == pad_token_id)
+        - 1
+        + context_length
+    )
     assert (
         reward_logits.shape[-1] == 1
     ), "Reward model should output a single scalar per token. Check if you added `num_labels=1` when doing `AutoModelForSequenceClassification.from_pretrained(...)`."
@@ -236,10 +246,14 @@ def apply_verifiable_reward(
     # decode the responses
     decoded_responses = tokenizer.batch_decode(responses, skip_special_tokens=True)
     # for now, below is not used. but keeping it around in case we need it.
-    decoded_query_responses = tokenizer.batch_decode(query_responses, skip_special_tokens=True)  # noqa: F841
+    decoded_query_responses = tokenizer.batch_decode(
+        query_responses, skip_special_tokens=True
+    )  # noqa: F841
     # compare with ground truth.
     rewards = []
-    for prediction, ground_truth, dataset in zip(decoded_responses, ground_truths, datasets):
+    for prediction, ground_truth, dataset in zip(
+        decoded_responses, ground_truths, datasets
+    ):
         verified = False
         if ground_truth is None:
             logger.warning("No ground truth provided for a sample, applying 0 reward.")
@@ -309,12 +323,17 @@ def truncate_response(stop_token_id: int, pad_token_id: int, responses: torch.Te
     trunc_idxs = first_true_indices(responses == stop_token_id).unsqueeze(-1)
     new_size = [1] * (len(responses.size()) - 1) + [responses.shape[1]]
     idxs = torch.arange(responses.shape[1], device=responses.device).view(*new_size)
-    postprocessed_responses = torch.masked_fill(responses, idxs > trunc_idxs, pad_token_id)
+    postprocessed_responses = torch.masked_fill(
+        responses, idxs > trunc_idxs, pad_token_id
+    )
     return postprocessed_responses
 
 
 def generate(
-    lm_backbone: torch.nn.Module, queries: torch.Tensor, pad_token_id: int, generation_config: dict
+    lm_backbone: torch.nn.Module,
+    queries: torch.Tensor,
+    pad_token_id: int,
+    generation_config: dict,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Generates sequences from the language model backbone in a way that does not affect padding tokens.
@@ -386,7 +405,10 @@ def save_with_accelerate(
     # we usually do greedy decoding for generation, so this should be okay.
     # otherwise, we get an error thrown at save time.
     model.generation_config = transformers.GenerationConfig(
-        temperature=None, top_p=None, eos_token_id=tokenizer.eos_token_id, bos_token_id=tokenizer.bos_token_id
+        temperature=None,
+        top_p=None,
+        eos_token_id=tokenizer.eos_token_id,
+        bos_token_id=tokenizer.bos_token_id,
     )
 
     unwrapped_model: PreTrainedModel = accelerator.unwrap_model(model)
@@ -443,7 +465,9 @@ def push_folder_to_hub(
         if not api.repo_exists(hf_repo_id):
             api.create_repo(hf_repo_id, exist_ok=True, private=private)
         if hf_repo_revision is not None:
-            api.create_branch(repo_id=hf_repo_id, branch=hf_repo_revision, exist_ok=True)
+            api.create_branch(
+                repo_id=hf_repo_id, branch=hf_repo_revision, exist_ok=True
+            )
         api.upload_folder(
             repo_id=hf_repo_id,
             revision=hf_repo_revision,
@@ -457,7 +481,10 @@ def push_folder_to_hub(
 # ----------------------------------------------------------------------------
 # DeepSpeed utilities
 def get_all_parameters(sub_module, recurse=False):
-    return itertools.chain(sub_module.named_parameters(recurse=recurse), sub_module.ds_external_parameters())
+    return itertools.chain(
+        sub_module.named_parameters(recurse=recurse),
+        sub_module.ds_external_parameters(),
+    )
 
 
 def iter_params(module, recurse=False):
@@ -494,7 +521,9 @@ def add_hooks(model: "DeepSpeedEngine") -> None:
 
 @contextmanager
 def unwrap_model_for_generation(
-    model: Union["DistributedDataParallel", "DeepSpeedEngine"], accelerator: "Accelerator", is_peft_model: bool = False
+    model: Union["DistributedDataParallel", "DeepSpeedEngine"],
+    accelerator: "Accelerator",
+    is_peft_model: bool = False,
 ) -> Union["transformers.PreTrainedModel", "DeepSpeedEngine"]:
     """Context manager to unwrap a model for generation.
     For ZeRO-3 models, we gather the weights once to speed up generation.
@@ -502,7 +531,10 @@ def unwrap_model_for_generation(
     unwrapped_model = accelerator.unwrap_model(model)
     if is_peft_model:
         unwrapped_model.pretrained_model.disable_adapter()
-    if accelerator.state.deepspeed_plugin is not None and accelerator.state.deepspeed_plugin.zero_stage == 3:
+    if (
+        accelerator.state.deepspeed_plugin is not None
+        and accelerator.state.deepspeed_plugin.zero_stage == 3
+    ):
         with deepspeed.zero.GatheredParameters(model.parameters()):
             remove_hooks(model)
             yield accelerator.unwrap_model(model)
@@ -511,7 +543,9 @@ def unwrap_model_for_generation(
         yield unwrapped_model
 
 
-def prepare_deepspeed(model: torch.nn.Module, per_device_train_batch_size: int, mixed_precision: str):
+def prepare_deepspeed(
+    model: torch.nn.Module, per_device_train_batch_size: int, mixed_precision: str
+):
     """
     Prepares the model for training with DeepSpeed (both for stage 2 and 3), configuring the appropriate settings based on the model and
     batch size.
@@ -533,7 +567,9 @@ def prepare_deepspeed(model: torch.nn.Module, per_device_train_batch_size: int, 
     if config_kwargs["zero_optimization"]["stage"] != 3:
         config_kwargs["train_micro_batch_size_per_gpu"] = per_device_train_batch_size
         config_kwargs = {
-            "train_micro_batch_size_per_gpu": config_kwargs["train_micro_batch_size_per_gpu"],
+            "train_micro_batch_size_per_gpu": config_kwargs[
+                "train_micro_batch_size_per_gpu"
+            ],
             "prescale_gradients": False,
             "wall_clock_breakdown": False,
         }
@@ -546,13 +582,18 @@ def prepare_deepspeed(model: torch.nn.Module, per_device_train_batch_size: int, 
                 if getattr(model.config, "hidden_sizes", None)
                 else getattr(model.config, "hidden_size", None)
             )
-            if hidden_size is not None and config_kwargs["zero_optimization"]["stage"] == 3:
+            if (
+                hidden_size is not None
+                and config_kwargs["zero_optimization"]["stage"] == 3
+            ):
                 # Note that `stage3_prefetch_bucket_size` can produce DeepSpeed messages like: `Invalidate trace cache @ step 0: expected module 1, but got module 0`
                 # This is expected and is not an error, see: https://github.com/microsoft/DeepSpeed/discussions/4081
                 config_kwargs.update(
                     {
-                        "zero_optimization.reduce_bucket_size": hidden_size * hidden_size,
-                        "zero_optimization.stage3_param_persistence_threshold": 10 * hidden_size,
+                        "zero_optimization.reduce_bucket_size": hidden_size
+                        * hidden_size,
+                        "zero_optimization.stage3_param_persistence_threshold": 10
+                        * hidden_size,
                         "zero_optimization.stage3_prefetch_bucket_size": 0,
                     }
                 )
@@ -621,5 +662,7 @@ def print_rich_single_line_metrics(metrics):
 def exact_div(a, b, custom_error_message=""):
     q = a // b
     if a != q * b:
-        raise ValueError(f"{custom_error_message}, inexact division: {a} / {b} = {a / b}")
+        raise ValueError(
+            f"{custom_error_message}, inexact division: {a} / {b} = {a / b}"
+        )
     return q

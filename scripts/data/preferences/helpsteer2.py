@@ -8,11 +8,20 @@ ALL_ASPECTS = ["helpfulness", "correctness", "coherence", "complexity", "verbosi
 
 
 def average_score(example, aspects_to_consider):
-    return sum(example[aspect] for aspect in aspects_to_consider) / len(aspects_to_consider)
+    return sum(example[aspect] for aspect in aspects_to_consider) / len(
+        aspects_to_consider
+    )
 
 
-def binarize_dataset(dataset, aspects_to_ignore: List[str], min_score: Optional[float], margin: Optional[float]):
-    aspects_to_consider = [aspect for aspect in ALL_ASPECTS if aspect not in aspects_to_ignore]
+def binarize_dataset(
+    dataset,
+    aspects_to_ignore: List[str],
+    min_score: Optional[float],
+    margin: Optional[float],
+):
+    aspects_to_consider = [
+        aspect for aspect in ALL_ASPECTS if aspect not in aspects_to_ignore
+    ]
     prompt_groups = defaultdict(list)
 
     for example in dataset:
@@ -23,7 +32,9 @@ def binarize_dataset(dataset, aspects_to_ignore: List[str], min_score: Optional[
         if len(responses) < 2:
             continue  # Skip prompts with only one response
 
-        sorted_responses = sorted(responses, key=lambda x: average_score(x, aspects_to_consider), reverse=True)
+        sorted_responses = sorted(
+            responses, key=lambda x: average_score(x, aspects_to_consider), reverse=True
+        )
         chosen = sorted_responses[0]
         rejected = sorted_responses[-1]
 
@@ -44,8 +55,14 @@ def binarize_dataset(dataset, aspects_to_ignore: List[str], min_score: Optional[
 
         binarized_example = {
             "prompt": prompt,
-            "chosen": [{"role": "user", "content": prompt}, {"role": "assistant", "content": chosen["response"]}],
-            "rejected": [{"role": "user", "content": prompt}, {"role": "assistant", "content": rejected["response"]}],
+            "chosen": [
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": chosen["response"]},
+            ],
+            "rejected": [
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": rejected["response"]},
+            ],
             "avg_scores": (round(chosen_avg_score, 2), round(rejected_avg_score, 2)),
         }
         binarized_data.append(binarized_example)
@@ -101,15 +118,28 @@ if __name__ == "__main__":
         description="Binarize HelpSteer 2 dataset and optionally upload to Hugging Face Hub."
     )
     parser.add_argument(
-        "--aspects_to_ignore", nargs="*", default=[], help="Aspects to ignore during binarization (default: none)"
+        "--aspects_to_ignore",
+        nargs="*",
+        default=[],
+        help="Aspects to ignore during binarization (default: none)",
     )
     parser.add_argument(
-        "--min_score", type=float, default=None, help="Minimum average score for chosen responses (default: None)"
+        "--min_score",
+        type=float,
+        default=None,
+        help="Minimum average score for chosen responses (default: None)",
     )
     parser.add_argument(
-        "--margin", type=float, default=None, help="Minimum margin between chosen and rejected scores (default: None)"
+        "--margin",
+        type=float,
+        default=None,
+        help="Minimum margin between chosen and rejected scores (default: None)",
     )
-    parser.add_argument("--push_to_hub", action="store_true", help="Upload the dataset to Hugging Face Hub")
+    parser.add_argument(
+        "--push_to_hub",
+        action="store_true",
+        help="Upload the dataset to Hugging Face Hub",
+    )
     parser.add_argument(
         "--hf_entity",
         type=str,
@@ -121,5 +151,13 @@ if __name__ == "__main__":
     # assert that the aspects to ignore are valid
     for aspect in args.aspects_to_ignore:
         if aspect not in ALL_ASPECTS:
-            raise ValueError(f"Invalid aspect to ignore: {aspect}. Must be one of {ALL_ASPECTS}")
-    main(args.aspects_to_ignore, args.min_score, args.margin, args.push_to_hub, args.hf_entity)
+            raise ValueError(
+                f"Invalid aspect to ignore: {aspect}. Must be one of {ALL_ASPECTS}"
+            )
+    main(
+        args.aspects_to_ignore,
+        args.min_score,
+        args.margin,
+        args.push_to_hub,
+        args.hf_entity,
+    )

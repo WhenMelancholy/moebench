@@ -5,7 +5,6 @@ import numpy as np
 
 
 def main(push_to_hub: bool, hf_entity: str | None):
-
     ex_url = "https://huggingface.co/datasets/ai2-adapt-dev/ultrafeedback-pipeline-replication/tree/main/setup_0"
     load_repo = "ai2-adapt-dev/ultrafeedback-pipeline-replication"
     dataset_name_base = "ultrafeedback-replication-p"
@@ -33,7 +32,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Process UltraFeedback replication preference data and optionally upload to Hugging Face Hub."
     )
-    parser.add_argument("--push_to_hub", action="store_true", help="Upload the dataset to Hugging Face Hub")
+    parser.add_argument(
+        "--push_to_hub",
+        action="store_true",
+        help="Upload the dataset to Hugging Face Hub",
+    )
     parser.add_argument(
         "--hf_entity",
         type=str,

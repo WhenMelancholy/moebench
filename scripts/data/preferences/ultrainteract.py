@@ -43,7 +43,9 @@ def process_and_upload(task, push_to_hub, hf_entity):
     dataset_df["length"] = dataset_df["trajectory"].apply(len)
 
     # take the longest length row per prompt ("parent_id")
-    dataset_df_longest = dataset_df.sort_values("length", ascending=False).drop_duplicates("parent_id")
+    dataset_df_longest = dataset_df.sort_values(
+        "length", ascending=False
+    ).drop_duplicates("parent_id")
 
     # convert to messages format (trajectory)
     dataset_hf = Dataset.from_pandas(dataset_df_longest)
@@ -77,7 +79,9 @@ def process_and_upload(task, push_to_hub, hf_entity):
         print(f"Pushing dataset to Hub: {repo_id}")
         dataset_hf.push_to_hub(repo_id)
     else:
-        print(f"Dataset UltraInteract_pair_randomlen_{task} processed (not pushed to Hub)")
+        print(
+            f"Dataset UltraInteract_pair_randomlen_{task} processed (not pushed to Hub)"
+        )
 
     # print length distribution for both datasets
     print(f"Task: {task}")
@@ -103,7 +107,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Process UltraInteract dataset and optionally upload to Hugging Face Hub."
     )
-    parser.add_argument("--push_to_hub", action="store_true", help="Upload the dataset to Hugging Face Hub")
+    parser.add_argument(
+        "--push_to_hub",
+        action="store_true",
+        help="Upload the dataset to Hugging Face Hub",
+    )
     parser.add_argument(
         "--hf_entity",
         type=str,

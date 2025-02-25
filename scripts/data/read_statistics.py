@@ -1,12 +1,14 @@
+import argparse
 import json
 import os
-import argparse
-from typing import List, Dict
+from typing import Dict, List
+
 """
 Usage:
 python scripts/data/read_statistics.py --latex data/processed/
 
 """
+
 
 def load_dataset_statistics(output_dir: str) -> List[Dict]:
     statistics = []
@@ -14,28 +16,42 @@ def load_dataset_statistics(output_dir: str) -> List[Dict]:
         for filename in files:
             if filename.endswith("_statistics.json"):
                 file_path = os.path.join(root, filename)
-                with open(file_path, 'r') as f:
+                with open(file_path, "r") as f:
                     data = json.load(f)
-                    dataset_name = os.path.basename(root) + "/" + filename.split("_statistics")[0]
-                    
+                    dataset_name = (
+                        os.path.basename(root) + "/" + filename.split("_statistics")[0]
+                    )
+
                     stat = {
-                        'Dataset': dataset_name,
-                        'Num Instances': data['num_instances'],
-                        'Avg Total Length': data['total_lengths_summary']['mean'],
-                        'Max Total Length': data['total_lengths_summary']['max'],
-                        'Avg User Prompt': data['user_prompt_lengths_summary']['mean'],
-                        'Avg Assistant Response': data['assistant_response_lengths_summary']['mean'],
-                        'Avg Turns': data['turns_summary']['mean'],
-                        '% > 512': data['num_instances_with_total_length_gt_512'] / data['num_instances'] * 100,
-                        '% > 1024': data['num_instances_with_total_length_gt_1024'] / data['num_instances'] * 100,
-                        '% > 2048': data['num_instances_with_total_length_gt_2048'] / data['num_instances'] * 100,
-                        '% > 4096': data['num_instances_with_total_length_gt_4096'] / data['num_instances'] * 100,
+                        "Dataset": dataset_name,
+                        "Num Instances": data["num_instances"],
+                        "Avg Total Length": data["total_lengths_summary"]["mean"],
+                        "Max Total Length": data["total_lengths_summary"]["max"],
+                        "Avg User Prompt": data["user_prompt_lengths_summary"]["mean"],
+                        "Avg Assistant Response": data[
+                            "assistant_response_lengths_summary"
+                        ]["mean"],
+                        "Avg Turns": data["turns_summary"]["mean"],
+                        "% > 512": data["num_instances_with_total_length_gt_512"]
+                        / data["num_instances"]
+                        * 100,
+                        "% > 1024": data["num_instances_with_total_length_gt_1024"]
+                        / data["num_instances"]
+                        * 100,
+                        "% > 2048": data["num_instances_with_total_length_gt_2048"]
+                        / data["num_instances"]
+                        * 100,
+                        "% > 4096": data["num_instances_with_total_length_gt_4096"]
+                        / data["num_instances"]
+                        * 100,
                     }
                     statistics.append(stat)
     return statistics
 
 
-def print_markdown_table(statistics: List[Dict], columns: List[str], roundings: Dict[str, int]):
+def print_markdown_table(
+    statistics: List[Dict], columns: List[str], roundings: Dict[str, int]
+):
     if not statistics:
         print("No statistics found.")
         return
@@ -46,17 +62,23 @@ def print_markdown_table(statistics: List[Dict], columns: List[str], roundings: 
     print("|" + "|".join(["---" for _ in headers]) + "|")
 
     # Print table rows
-    for stat in sorted(statistics, key=lambda x: x['Dataset']):
+    for stat in sorted(statistics, key=lambda x: x["Dataset"]):
         row = []
         for col in columns:
             value = stat[col]
             if isinstance(value, float) and col in roundings:
                 value = round(value, roundings[col])
-            row.append(f"{value:.{roundings.get(col, 2)}f}" if isinstance(value, float) else str(value))
+            row.append(
+                f"{value:.{roundings.get(col, 2)}f}"
+                if isinstance(value, float)
+                else str(value)
+            )
         print("| " + " | ".join(row) + " |")
 
 
-def print_latex_table(statistics: List[Dict], columns: List[str], roundings: Dict[str, int]):
+def print_latex_table(
+    statistics: List[Dict], columns: List[str], roundings: Dict[str, int]
+):
     if not statistics:
         print("No statistics found.")
         return
@@ -73,26 +95,38 @@ def print_latex_table(statistics: List[Dict], columns: List[str], roundings: Dic
     print("\\midrule")
 
     # Print table rows
-    for stat in sorted(statistics, key=lambda x: x['Dataset']):
+    for stat in sorted(statistics, key=lambda x: x["Dataset"]):
         row = []
         for col in columns:
             value = stat[col]
             if isinstance(value, float) and col in roundings:
                 value = round(value, roundings[col])
-            row.append(f"{value:.{roundings.get(col, 2)}f}" if isinstance(value, float) else str(value))
+            row.append(
+                f"{value:.{roundings.get(col, 2)}f}"
+                if isinstance(value, float)
+                else str(value)
+            )
         print(" & ".join(row) + "\\\\")
     print("\\bottomrule")
     print("\\end{tabular}")
     print("}")
-    print("\\caption{}");
+    print("\\caption{}")
     print("\\label{}")
     print("\\end{table}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate a table from dataset statistics JSON files.")
-    parser.add_argument("output_dir", help="Directory containing the statistics JSON files")
-    parser.add_argument("--latex", action="store_true", help="Output in LaTeX format instead of markdown")
+    parser = argparse.ArgumentParser(
+        description="Generate a table from dataset statistics JSON files."
+    )
+    parser.add_argument(
+        "output_dir", help="Directory containing the statistics JSON files"
+    )
+    parser.add_argument(
+        "--latex",
+        action="store_true",
+        help="Output in LaTeX format instead of markdown",
+    )
     args = parser.parse_args()
 
     statistics = load_dataset_statistics(args.output_dir)

@@ -1,20 +1,24 @@
-'''
+"""
 A script for quickly collecting beaker results given a prefix.
 Computes mmlu average quckly.
-'''
+"""
 import argparse
+
 from beaker import Beaker
 
-from eval.utils import (
-    upload_results_to_hf
-)
+from eval.utils import upload_results_to_hf
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--prefix", type=str, required=True)
 parser.add_argument(
-    "--workspace", type=str, default="ai2/tulu-3-results", help="workspace to search for experiments"
+    "--workspace",
+    type=str,
+    default="ai2/tulu-3-results",
+    help="workspace to search for experiments",
 )
-parser.add_argument("--upload_to_hf", type=str, default=None)  # set to allenai/tulu-3-results//results/<model_name> to upload
+parser.add_argument(
+    "--upload_to_hf", type=str, default=None
+)  # set to allenai/tulu-3-results//results/<model_name> to upload
 args = parser.parse_args()
 
 MMLU_TASKS = [
@@ -74,14 +78,16 @@ MMLU_TASKS = [
     "mmlu_sociology",
     "mmlu_us_foreign_policy",
     "mmlu_virology",
-    "mmlu_world_religions"
+    "mmlu_world_religions",
 ]
 
 beaker = Beaker.from_env(default_workspace=args.workspace)
 
 # get all experiments in workspace matching the prefix
 results = {}
-for exp in beaker.workspace.iter_experiments(workspace=args.workspace, match=args.prefix):
+for exp in beaker.workspace.iter_experiments(
+    workspace=args.workspace, match=args.prefix
+):
     # grab eval name
     eval_name = None
     for name in MMLU_TASKS:
@@ -102,7 +108,7 @@ for exp in beaker.workspace.iter_experiments(workspace=args.workspace, match=arg
 
 # finally, print results in order given with tab spacing
 for eval_name in MMLU_TASKS:
-    print(eval_name, '\t', results.get(eval_name + ":mc::tulu", 0))
+    print(eval_name, "\t", results.get(eval_name + ":mc::tulu", 0))
 print()
 # compute macro-average (usual mmlu score)
 mmlu_sum = 0
@@ -113,11 +119,8 @@ mmlu_avg = mmlu_sum / len(MMLU_TASKS)
 print(f"Macro-average MMLU: {mmlu_avg}")
 
 results_blob = {
-    "metrics": {
-        "primary_score": mmlu_avg,
-        **results
-    },
-    "task_name": "mmlu:mc::tulu"
+    "metrics": {"primary_score": mmlu_avg, **results},
+    "task_name": "mmlu:mc::tulu",
 }
 
 # upload to huggingface if asked

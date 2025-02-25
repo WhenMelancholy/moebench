@@ -4,7 +4,8 @@ from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import numpy as np
-from eval.mbpp.execution import check_correctness 
+
+from eval.mbpp.execution import check_correctness
 
 # https://github.com/bigcode-project/bigcode-evaluation-harness/blob/main/bigcode_eval/tasks/custom_metrics/code_eval.py#L129
 
@@ -31,6 +32,7 @@ with:
 ################################################################################\
 """
 
+
 def compute_code_eval(predictions, k=[1, 10, 100], num_workers=4, timeout=3.0):
     """Returns the scores"""
 
@@ -47,11 +49,16 @@ def compute_code_eval(predictions, k=[1, 10, 100], num_workers=4, timeout=3.0):
         results = defaultdict(list)
 
         for sample in predictions:
-            test_program = sample['completion'] + "\n" + sample['test_cases']
-            args = (test_program, timeout, sample['task_id'], completion_id[sample['task_id']])
+            test_program = sample["completion"] + "\n" + sample["test_cases"]
+            args = (
+                test_program,
+                timeout,
+                sample["task_id"],
+                completion_id[sample["task_id"]],
+            )
             future = executor.submit(check_correctness, *args)
             futures.append(future)
-            completion_id[sample['task_id']] += 1
+            completion_id[sample["task_id"]] += 1
             n_samples += 1
 
         for future in as_completed(futures):
@@ -69,7 +76,11 @@ def compute_code_eval(predictions, k=[1, 10, 100], num_workers=4, timeout=3.0):
     ks = k
     if not isinstance(ks, (list, tuple)):
         ks = [ks]
-    pass_at_k = {f"pass@{k}": estimate_pass_at_k(total, correct, k).mean() for k in ks if (total >= k).all()}
+    pass_at_k = {
+        f"pass@{k}": estimate_pass_at_k(total, correct, k).mean()
+        for k in ks
+        if (total >= k).all()
+    }
 
     return pass_at_k, results
 
@@ -89,4 +100,6 @@ def estimate_pass_at_k(num_samples, num_correct, k):
         assert len(num_samples) == len(num_correct)
         num_samples_it = iter(num_samples)
 
-    return np.array([estimator(int(n), int(c), k) for n, c in zip(num_samples_it, num_correct)])
+    return np.array(
+        [estimator(int(n), int(c), k) for n, c in zip(num_samples_it, num_correct)]
+    )

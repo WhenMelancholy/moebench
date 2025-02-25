@@ -39,7 +39,9 @@ class LLMProcessor:
         self.config = config
         self.async_client = AsyncOpenAI()
 
-    async def process_text(self, data: dict, i: int, limiter: asyncio.Semaphore, args: Args, gen_args: Args):
+    async def process_text(
+        self, data: dict, i: int, limiter: asyncio.Semaphore, args: Args, gen_args: Args
+    ):
         if args.mode == "generation":
             template = get_generation_template(args.skill)
             text = template.format(prompt=data)
@@ -55,7 +57,10 @@ class LLMProcessor:
                     response = await self.async_client.chat.completions.create(
                         model=self.config.model,
                         messages=[
-                            {"role": "system", "content": "You are a helpful assistant."},
+                            {
+                                "role": "system",
+                                "content": "You are a helpful assistant.",
+                            },
                             {"role": "user", "content": text},
                         ],
                         n=gen_args.num_completions,  # Request multiple completions
@@ -65,7 +70,9 @@ class LLMProcessor:
                         stop=None,  # Add stopping criteria if needed
                     )
                     # Collect all completions if `n > 1`
-                    completions = [choice.message.content for choice in response.choices]
+                    completions = [
+                        choice.message.content for choice in response.choices
+                    ]
                     if args.mode == "generation":
                         response = completions
                     elif args.mode == "judgement":
@@ -90,6 +97,9 @@ class LLMProcessor:
 
     async def process_batch(self, data_list: List[dict], args: Args, gen_args: Args):
         limiter = asyncio.Semaphore(self.config.max_parallel_requests)
-        tasks = [self.process_text(data, i, limiter, args, gen_args) for i, data in enumerate(data_list)]
+        tasks = [
+            self.process_text(data, i, limiter, args, gen_args)
+            for i, data in enumerate(data_list)
+        ]
         # Use tqdm to track progress
         return await tqdm.gather(*tasks, total=len(tasks), desc="Processing Batch")

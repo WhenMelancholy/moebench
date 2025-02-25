@@ -38,7 +38,10 @@ def find_shared_text(chosen_text: str, rejected_text: str):
 
 
 def evaluate(
-    model: PreTrainedModel, dataloader: DataLoader, tokenizer: PreTrainedTokenizer, max_sampled_texts: int = 0
+    model: PreTrainedModel,
+    dataloader: DataLoader,
+    tokenizer: PreTrainedTokenizer,
+    max_sampled_texts: int = 0,
 ) -> Tuple[dict, dict]:
     model.eval()
     total_loss = 0
@@ -52,8 +55,12 @@ def evaluate(
         table = defaultdict(list)
     with torch.no_grad():
         for data in tqdm(dataloader):
-            query_responses = torch.cat((data[INPUT_IDS_CHOSEN_KEY], data[INPUT_IDS_REJECTED_KEY]), dim=0)
-            _, predicted_reward, _ = get_reward(model, query_responses, tokenizer.pad_token_id, 0)
+            query_responses = torch.cat(
+                (data[INPUT_IDS_CHOSEN_KEY], data[INPUT_IDS_REJECTED_KEY]), dim=0
+            )
+            _, predicted_reward, _ = get_reward(
+                model, query_responses, tokenizer.pad_token_id, 0
+            )
             chosen_rewards = predicted_reward[: data[INPUT_IDS_CHOSEN_KEY].shape[0]]
             rejected_rewards = predicted_reward[data[INPUT_IDS_CHOSEN_KEY].shape[0] :]
             accuracy = (chosen_rewards > rejected_rewards).float().mean()
@@ -65,25 +72,34 @@ def evaluate(
             total_reward_margin += (chosen_rewards - rejected_rewards).mean().item()
             total_batches += 1
 
-            if table is not None and len(table["shared prompt text"]) < max_sampled_texts:
+            if (
+                table is not None
+                and len(table["shared prompt text"]) < max_sampled_texts
+            ):
                 chosen_texts = tokenizer.batch_decode(data[INPUT_IDS_CHOSEN_KEY])
                 rejected_texts = tokenizer.batch_decode(data[INPUT_IDS_REJECTED_KEY])
                 # remove padding
-                chosen_texts = [item.replace(tokenizer.pad_token, "") for item in chosen_texts]
-                rejected_texts = [item.replace(tokenizer.pad_token, "") for item in rejected_texts]
+                chosen_texts = [
+                    item.replace(tokenizer.pad_token, "") for item in chosen_texts
+                ]
+                rejected_texts = [
+                    item.replace(tokenizer.pad_token, "") for item in rejected_texts
+                ]
                 rewards_rounded = [
                     [round(chosen.item(), 4), round(rejected.item(), 4)]
                     for chosen, rejected in zip(chosen_rewards, rejected_rewards)
                 ]
                 correct_prediction = [
-                    bool((chosen > rejected)) for chosen, rejected in zip(chosen_rewards, rejected_rewards)
+                    bool((chosen > rejected))
+                    for chosen, rejected in zip(chosen_rewards, rejected_rewards)
                 ]
                 shared_texts = [
                     find_shared_text(chosen_text, rejected_text)
                     for chosen_text, rejected_text in zip(chosen_texts, rejected_texts)
                 ]
                 chosen_response_texts = [
-                    chosen_text[len(shared_text) :] for chosen_text, shared_text in zip(chosen_texts, shared_texts)
+                    chosen_text[len(shared_text) :]
+                    for chosen_text, shared_text in zip(chosen_texts, shared_texts)
                 ]
                 rejected_response_texts = [
                     rejected_text[len(shared_text) :]
@@ -106,12 +122,19 @@ def evaluate(
 
 
 if __name__ == "__main__":
-    model = AutoModelForSequenceClassification.from_pretrained("EleutherAI/pythia-14m", num_labels=1)
-    dataset_config = DatasetConfig(
-        dataset_name="trl-internal-testing/sentiment-trl-style", chat_template="simple_chat"
+    model = AutoModelForSequenceClassification.from_pretrained(
+        "EleutherAI/pythia-14m", num_labels=1
     )
-    tokenizer = AutoTokenizer.from_pretrained("EleutherAI/pythia-14m", padding_side="right")
-    tokenizer.add_special_tokens({"pad_token": "[PAD]"})  # NOTE: we do not resize the embedding
+    dataset_config = DatasetConfig(
+        dataset_name="trl-internal-testing/sentiment-trl-style",
+        chat_template="simple_chat",
+    )
+    tokenizer = AutoTokenizer.from_pretrained(
+        "EleutherAI/pythia-14m", padding_side="right"
+    )
+    tokenizer.add_special_tokens(
+        {"pad_token": "[PAD]"}
+    )  # NOTE: we do not resize the embedding
     tokenizer.chat_template = CHAT_TEMPLATES[dataset_config.chat_template]
     eval_dataset = load_dataset(dataset_config.dataset_name)["test"]
     dataset_processor = PreferenceDatasetProcessor(

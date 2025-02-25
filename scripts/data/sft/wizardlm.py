@@ -5,7 +5,6 @@ from typing import List, Optional
 
 from scripts.data.sft.utils import convert_sft_dataset
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Process WizardLM evol instruct dataset and optionally upload to Hugging Face Hub."
@@ -47,7 +46,7 @@ if __name__ == "__main__":
         help="Apply empty message filters to the dataset.",
     )
     args = parser.parse_args()
-    
+
     role_map = {
         "gpt": "assistant",
         "human": "user",
@@ -55,10 +54,11 @@ if __name__ == "__main__":
     }
     conversion_func = lambda example: {
         "messages": [
-            {"role": role_map[it["from"]], "content": it["value"]} for it in example["conversations"]
+            {"role": role_map[it["from"]], "content": it["value"]}
+            for it in example["conversations"]
         ]
     }
-    
+
     readme_content = (
         "This is a converted version of the WizardLM evol instruct dataset into Tulu SFT training format.\n\n"
         "The conversion script can be found in our "
@@ -73,7 +73,7 @@ if __name__ == "__main__":
         "Please refer to the [original dataset](https://huggingface.co/datasets/WizardLMTeam/WizardLM_evol_instruct_V2_196k) "
         "for more information about this dataset and the license."
     )
-    
+
     convert_sft_dataset(
         ds=None,
         hf_dataset_id="WizardLMTeam/WizardLM_evol_instruct_V2_196k",
@@ -86,4 +86,3 @@ if __name__ == "__main__":
         local_save_dir=args.local_save_dir,
         readme_content=readme_content,
     )
-    

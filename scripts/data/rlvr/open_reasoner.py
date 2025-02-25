@@ -6,9 +6,9 @@ python scripts/data/rlvr/open_reasoner.py --push_to_hub
 python scripts/data/rlvr/open_reasoner.py --push_to_hub --hf_entity ai2-adapt-dev
 """
 
+import os
 from collections import defaultdict
 from dataclasses import dataclass
-import os
 from typing import Optional
 
 import datasets
@@ -16,15 +16,18 @@ from huggingface_hub import HfApi
 from huggingface_hub.repocard import RepoCard
 from transformers import HfArgumentParser
 
+
 @dataclass
 class Args:
     push_to_hub: bool = False
     hf_entity: Optional[str] = None
 
+
 def main(args: Args):
     # download https://github.com/Open-Reasoner-Zero/Open-Reasoner-Zero/raw/refs/heads/main/data/orz_math_57k_collected.json
-    import requests
     import json
+
+    import requests
 
     file_path = "orz_math_57k_collected.json"
     if not os.path.exists(file_path):
@@ -32,17 +35,19 @@ def main(args: Args):
         response = requests.get(url)
         with open(file_path, "w") as f:
             f.write(response.text)
-    
+
     with open(file_path, "r") as f:
         data = json.load(f)
-    
+
     table = defaultdict(list)
     for item in data:
-        assert len(item) == 2 # 1 question 2 ground truth
-        table["messages"].append([
-            {"role": "user", "content": item[0]["value"]},
-            {"role": "assistant", "content": item[1]["ground_truth"]["value"]},
-        ])
+        assert len(item) == 2  # 1 question 2 ground truth
+        table["messages"].append(
+            [
+                {"role": "user", "content": item[0]["value"]},
+                {"role": "assistant", "content": item[1]["ground_truth"]["value"]},
+            ]
+        )
         table["ground_truth"].append(item[1]["ground_truth"]["value"])
         table["dataset"].append("math")
     dataset = datasets.Dataset.from_dict(table)
@@ -90,11 +95,13 @@ The dataset contains math problems and their solutions in a conversational forma
 
 - `messages`: List of message dictionaries with user questions and assistant answers
 - `ground_truth`: The correct solution for each problem
-- `dataset`: Always "math" to indicate this is from the math datases""")
+- `dataset`: Always "math" to indicate this is from the math datases"""
+        )
         repo_card.push_to_hub(
             repo_id,
             repo_type="dataset",
         )
+
 
 if __name__ == "__main__":
     parser = HfArgumentParser((Args))

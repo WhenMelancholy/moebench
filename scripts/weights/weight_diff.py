@@ -12,7 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from typing import Optional, Dict
+from typing import Dict, Optional
 
 import fire
 import torch
@@ -36,8 +36,12 @@ def smart_tokenizer_and_embedding_resize(
         input_embeddings = model.get_input_embeddings().weight.data
         output_embeddings = model.get_output_embeddings().weight.data
 
-        input_embeddings_avg = input_embeddings[:-num_new_tokens].mean(dim=0, keepdim=True)
-        output_embeddings_avg = output_embeddings[:-num_new_tokens].mean(dim=0, keepdim=True)
+        input_embeddings_avg = input_embeddings[:-num_new_tokens].mean(
+            dim=0, keepdim=True
+        )
+        output_embeddings_avg = output_embeddings[:-num_new_tokens].mean(
+            dim=0, keepdim=True
+        )
 
         input_embeddings[-num_new_tokens:] = input_embeddings_avg
         output_embeddings[-num_new_tokens:] = output_embeddings_avg
@@ -45,7 +49,10 @@ def smart_tokenizer_and_embedding_resize(
 
 @torch.inference_mode()
 def make_diff(
-    path_raw: str, path_tuned: str, path_diff: str, device="cpu",  # "cuda" or "cpu"
+    path_raw: str,
+    path_tuned: str,
+    path_diff: str,
+    device="cpu",  # "cuda" or "cpu"
 ):
     """Make the weight diff.
 
@@ -54,24 +61,28 @@ def make_diff(
     Run:
         python weight_diff.py make_diff --path_raw <your_path_raw> --path_tuned <your_path_tuned> --path_diff <your_path_diff>
     """
-    model_tuned: transformers.PreTrainedModel = transformers.AutoModelForCausalLM.from_pretrained(
-        path_tuned,
-        device_map={"": torch.device(device)},
-        torch_dtype=torch.float32,
-        low_cpu_mem_usage=True,
+    model_tuned: transformers.PreTrainedModel = (
+        transformers.AutoModelForCausalLM.from_pretrained(
+            path_tuned,
+            device_map={"": torch.device(device)},
+            torch_dtype=torch.float32,
+            low_cpu_mem_usage=True,
+        )
     )
-    model_raw: transformers.PreTrainedModel = transformers.AutoModelForCausalLM.from_pretrained(
-        path_raw,
-        device_map={"": torch.device(device)},
-        torch_dtype=torch.float32,
-        low_cpu_mem_usage=True,
+    model_raw: transformers.PreTrainedModel = (
+        transformers.AutoModelForCausalLM.from_pretrained(
+            path_raw,
+            device_map={"": torch.device(device)},
+            torch_dtype=torch.float32,
+            low_cpu_mem_usage=True,
+        )
     )
 
-    tokenizer_tuned: transformers.PreTrainedTokenizer = transformers.AutoTokenizer.from_pretrained(
-        path_tuned
+    tokenizer_tuned: transformers.PreTrainedTokenizer = (
+        transformers.AutoTokenizer.from_pretrained(path_tuned)
     )
-    tokenizer_raw: transformers.PreTrainedTokenizer = transformers.AutoTokenizer.from_pretrained(
-        path_raw
+    tokenizer_raw: transformers.PreTrainedTokenizer = (
+        transformers.AutoTokenizer.from_pretrained(path_raw)
     )
     if tokenizer_raw.pad_token is None:
         tokenizer_raw.add_special_tokens(dict(pad_token="[PAD]"))
@@ -113,21 +124,25 @@ def recover(
             Next time you can load the recovered weights directly from `<your_path_tuned>`.
         - to run inference on a reference model (e.g. to ensure diff is correct), set `--original_model <your_model_name>`.
     """
-    model_raw: transformers.PreTrainedModel = transformers.AutoModelForCausalLM.from_pretrained(
-        path_raw,
-        device_map={"": torch.device(device)},
-        torch_dtype=torch.float32,
-        low_cpu_mem_usage=True,
+    model_raw: transformers.PreTrainedModel = (
+        transformers.AutoModelForCausalLM.from_pretrained(
+            path_raw,
+            device_map={"": torch.device(device)},
+            torch_dtype=torch.float32,
+            low_cpu_mem_usage=True,
+        )
     )
-    model_recovered: transformers.PreTrainedModel = transformers.AutoModelForCausalLM.from_pretrained(
-        path_diff,
-        device_map={"": torch.device(device)},
-        torch_dtype=torch.float32,
-        low_cpu_mem_usage=True,
+    model_recovered: transformers.PreTrainedModel = (
+        transformers.AutoModelForCausalLM.from_pretrained(
+            path_diff,
+            device_map={"": torch.device(device)},
+            torch_dtype=torch.float32,
+            low_cpu_mem_usage=True,
+        )
     )
 
-    tokenizer_raw: transformers.PreTrainedTokenizer = transformers.LlamaTokenizer.from_pretrained(
-        path_raw
+    tokenizer_raw: transformers.PreTrainedTokenizer = (
+        transformers.LlamaTokenizer.from_pretrained(path_raw)
     )
     if tokenizer_raw.pad_token is None:
         smart_tokenizer_and_embedding_resize(
@@ -135,8 +150,8 @@ def recover(
             model=model_raw,
             tokenizer=tokenizer_raw,
         )
-    tokenizer_recovered: transformers.PreTrainedTokenizer = transformers.LlamaTokenizer.from_pretrained(
-        path_diff
+    tokenizer_recovered: transformers.PreTrainedTokenizer = (
+        transformers.LlamaTokenizer.from_pretrained(path_diff)
     )
 
     state_dict_recovered = model_recovered.state_dict()
@@ -165,7 +180,9 @@ def recover(
             og_model = transformers.AutoModelForCausalLM.from_pretrained(original_model)
             og_inputs = og_tokenizer(input_text, return_tensors="pt")
             og_out = og_model.generate(inputs=og_inputs.input_ids, max_new_tokens=100)
-            og_output_text = og_tokenizer.batch_decode(og_out, skip_special_tokens=True)[0]
+            og_output_text = og_tokenizer.batch_decode(
+                og_out, skip_special_tokens=True
+            )[0]
             og_output_text = og_output_text[len(input_text) :]
             print("Original model:")
             print(f"Input: {input_text}\nCompletion: {og_output_text}")

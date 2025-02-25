@@ -1,10 +1,10 @@
+import os
 from abc import ABC, abstractmethod
 from warnings import warn
-import os
 
 from datasets import load_dataset
-
 from evaluation import compute_code_eval
+
 
 class Task(ABC):
     """A task represents an entire benchmark including its dataset, problems,
@@ -106,7 +106,15 @@ class MBPP(Task):
 
     def __init__(self):
         super().__init__(
-            stop_words=["\nclass", "\nassert", '\n"""', "\nprint", "\nif", "\n<|/", "\n```"],
+            stop_words=[
+                "\nclass",
+                "\nassert",
+                '\n"""',
+                "\nprint",
+                "\nif",
+                "\n<|/",
+                "\n```",
+            ],
             requires_execution=True,
         )
 
@@ -132,7 +140,6 @@ class MBPP(Task):
     def get_reference(self, doc):
         """Builds the reference solution for the doc (sample from the test dataset)."""
         return "\n".join(doc["test_list"])
-
 
     def postprocess_generation(self, generation, idx):
         """Defines the postprocessing for a LM generation.

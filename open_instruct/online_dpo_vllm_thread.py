@@ -104,7 +104,12 @@ class Args:
     learning_rate: float = 2e-5
     """The initial learning rate for AdamW optimizer."""
     lr_scheduler_type: Literal[
-        "linear", "cosine", "cosine_with_restarts", "polynomial", "constant", "constant_with_warmup"
+        "linear",
+        "cosine",
+        "cosine_with_restarts",
+        "polynomial",
+        "constant",
+        "constant_with_warmup",
     ] = "linear"
     """Which scheduler to use"""
     warm_up_steps: int = 0
@@ -219,9 +224,14 @@ class Args:
     """What dataset to upload the metadata to. If unset, don't upload metadata"""
 
     def __post_init__(self):
-        self.dataset_mixer_dict, self.dataset_mixer = process_dataset_mixer(self.dataset_mixer)
+        self.dataset_mixer_dict, self.dataset_mixer = process_dataset_mixer(
+            self.dataset_mixer
+        )
         if self.dataset_eval_mixer is not None:
-            self.dataset_eval_mixer_dict, self.dataset_eval_mixer = process_dataset_mixer(self.dataset_eval_mixer)
+            (
+                self.dataset_eval_mixer_dict,
+                self.dataset_eval_mixer,
+            ) = process_dataset_mixer(self.dataset_eval_mixer)
 
 
 def process_dataset_mixer(value) -> Tuple[Optional[dict], Optional[str]]:
@@ -235,11 +245,19 @@ def process_dataset_mixer(value) -> Tuple[Optional[dict], Optional[str]]:
         raise ValueError("Input must be either a string or a dictionary")
 
 
-def calculate_runtime_args_and_accelerator(args: Args, model_config: ModelConfig) -> Accelerator:
+def calculate_runtime_args_and_accelerator(
+    args: Args, model_config: ModelConfig
+) -> Accelerator:
     """calculate (in-place) runtime args such as the effective batch size, word size, etc."""
-    accelerator = Accelerator(gradient_accumulation_steps=args.gradient_accumulation_steps)
+    accelerator = Accelerator(
+        gradient_accumulation_steps=args.gradient_accumulation_steps
+    )
     args.world_size = accelerator.num_processes
-    args.local_batch_size = args.per_device_train_batch_size * args.gradient_accumulation_steps * args.num_mini_batches
+    args.local_batch_size = (
+        args.per_device_train_batch_size
+        * args.gradient_accumulation_steps
+        * args.num_mini_batches
+    )
     args.micro_batch_size = int(args.per_device_train_batch_size * args.world_size)
     args.batch_size = int(args.local_batch_size * args.world_size)
     time_tensor = torch.tensor(int(time.time()), device=accelerator.device)
@@ -247,10 +265,14 @@ def calculate_runtime_args_and_accelerator(args: Args, model_config: ModelConfig
     time_int = broadcast(time_tensor, 0).item()
     args.run_name = f"{args.exp_name}__{args.seed}__{time_int}"
     args.mini_batch_size = exact_div(
-        args.batch_size, args.num_mini_batches, "`batch_size` must be a multiple of `num_mini_batches`"
+        args.batch_size,
+        args.num_mini_batches,
+        "`batch_size` must be a multiple of `num_mini_batches`",
     )
     args.local_mini_batch_size = exact_div(
-        args.local_batch_size, args.num_mini_batches, "`local_batch_size` must be a multiple of `num_mini_batches`"
+        args.local_batch_size,
+        args.num_mini_batches,
+        "`local_batch_size` must be a multiple of `num_mini_batches`",
     )
     args.num_training_steps = args.total_episodes // args.batch_size
     args.eval_freq = max(1, args.num_training_steps // args.num_evals)
@@ -270,7 +292,9 @@ def calculate_runtime_args_and_accelerator(args: Args, model_config: ModelConfig
         args.hf_repo_id = f"{args.hf_entity}/{args.hf_repo_id}"
         if args.hf_repo_revision is None:  # auto-generate one
             args.hf_repo_revision = args.run_name
-        args.hf_repo_url = f"https://huggingface.co/{args.hf_repo_id}/tree/{args.hf_repo_revision}"
+        args.hf_repo_url = (
+            f"https://huggingface.co/{args.hf_repo_id}/tree/{args.hf_repo_revision}"
+        )
 
     if args.with_tracking and accelerator.is_main_process:
         if args.wandb_entity is None:
@@ -317,14 +341,20 @@ def vllm_generate(
                 f"🔥🔥🔥 Loading weights using shared memory; Time to load weights: {time.time() - start_time:.2f} seconds"
             )
         generation_start_time = time.time()
-        outputs = llm.generate(prompt_token_ids=g_queries_list, sampling_params=generation_config)
+        outputs = llm.generate(
+            prompt_token_ids=g_queries_list, sampling_params=generation_config
+        )
         response_ids = [list(output.outputs[0].token_ids) for output in outputs]
         print(f"🔥🔥🔥 Generation time: {time.time() - generation_start_time:.2f} seconds")
         response_ids_Q.put(response_ids)
 
-        if sample_evaluation_prompt_token_ids is not None and (training_step - 1) % eval_freq == 0:
+        if (
+            sample_evaluation_prompt_token_ids is not None
+            and (training_step - 1) % eval_freq == 0
+        ):
             outputs = llm.generate(
-                prompt_token_ids=sample_evaluation_prompt_token_ids, sampling_params=generation_config
+                prompt_token_ids=sample_evaluation_prompt_token_ids,
+                sampling_params=generation_config,
             )
             response_ids = [list(output.outputs[0].token_ids) for output in outputs]
             evaluation_Q.put(response_ids)
@@ -334,7 +364,8 @@ def send_queries(accelerator, unwrapped_model, tokenizer, param_prompt_Q, querie
     g_queries_list = gather_object(queries.tolist())
     if accelerator.is_main_process:
         g_queries_list = [
-            [inneritem for inneritem in item if inneritem != tokenizer.pad_token_id] for item in g_queries_list
+            [inneritem for inneritem in item if inneritem != tokenizer.pad_token_id]
+            for item in g_queries_list
         ]  # remove padding
         param_prompt_Q.put((unwrapped_model, g_queries_list))
 
@@ -346,7 +377,9 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
     # set up experiment tracking and seeds
     all_configs = {}
     if is_beaker_job():
-        args.checkpoint_output_dir = os.environ.get("CHECKPOINT_OUTPUT_DIR", args.output_dir)
+        args.checkpoint_output_dir = os.environ.get(
+            "CHECKPOINT_OUTPUT_DIR", args.output_dir
+        )
         beaker_config = maybe_get_beaker_config()
         # try saving to the beaker `/output`, which will be uploaded to the beaker dataset
         if len(beaker_config.beaker_dataset_id_urls) > 0:
@@ -369,7 +402,8 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
         writer = SummaryWriter(f"runs/{args.run_name}")
         writer.add_text(
             "hyperparameters",
-            "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
+            "|param|value|\n|-|-|\n%s"
+            % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
         )
     device = torch.device(f"cuda:{accelerator.local_process_index}")
     random.seed(local_seed)
@@ -378,26 +412,46 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
     torch.backends.cudnn.deterministic = True
 
     # create a tokenizer (pad from right)
-    config = AutoConfig.from_pretrained(model_config.model_name_or_path, revision=model_config.model_revision)
+    config = AutoConfig.from_pretrained(
+        model_config.model_name_or_path, revision=model_config.model_revision
+    )
     tokenizer = AutoTokenizer.from_pretrained(
-        model_config.model_name_or_path, revision=model_config.model_revision, padding_side="right"
+        model_config.model_name_or_path,
+        revision=model_config.model_revision,
+        padding_side="right",
     )
     if config.architectures == "LlamaForCausalLM" and config.bos_token_id == 128000:
         tokenizer.pad_token_id = 128002  # <|reserved_special_token_0|>
     else:
-        tokenizer.add_special_tokens({"pad_token": "[PAD]"})  # NOTE: we do not resize the embedding
+        tokenizer.add_special_tokens(
+            {"pad_token": "[PAD]"}
+        )  # NOTE: we do not resize the embedding
     if dataset_config.chat_template is not None:
         tokenizer.chat_template = CHAT_TEMPLATES[dataset_config.chat_template]
 
     # create the dataset
     dataset_dict = DatasetDict()
     dataset_processor = SFTDatasetProcessor(tokenizer=tokenizer, config=dataset_config)
-    if len(args.dataset_train_splits) != len(args.dataset_mixer_dict) and len(args.dataset_train_splits) == 1:
-        args.dataset_train_splits = [args.dataset_train_splits[0]] * len(args.dataset_mixer_dict)
-        print(f"Dataset splits not provided for all datasets. Using the same {args.dataset_train_splits[0]} split for all datasets.")
-    if len(args.dataset_eval_splits) != len(args.dataset_eval_mixer_dict) and len(args.dataset_eval_splits) == 1:
-        args.dataset_eval_splits = [args.dataset_eval_splits[0]] * len(args.dataset_eval_mixer_dict)
-        print(f"Dataset splits not provided for all datasets. Using the same {args.dataset_eval_splits[0]} split for all datasets.")
+    if (
+        len(args.dataset_train_splits) != len(args.dataset_mixer_dict)
+        and len(args.dataset_train_splits) == 1
+    ):
+        args.dataset_train_splits = [args.dataset_train_splits[0]] * len(
+            args.dataset_mixer_dict
+        )
+        print(
+            f"Dataset splits not provided for all datasets. Using the same {args.dataset_train_splits[0]} split for all datasets."
+        )
+    if (
+        len(args.dataset_eval_splits) != len(args.dataset_eval_mixer_dict)
+        and len(args.dataset_eval_splits) == 1
+    ):
+        args.dataset_eval_splits = [args.dataset_eval_splits[0]] * len(
+            args.dataset_eval_mixer_dict
+        )
+        print(
+            f"Dataset splits not provided for all datasets. Using the same {args.dataset_eval_splits[0]} split for all datasets."
+        )
     train_dataset = combine_dataset(
         args.dataset_mixer_dict,
         splits=args.dataset_train_splits,
@@ -418,7 +472,9 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
             splits=args.dataset_eval_splits,
             columns_to_keep=[dataset_config.sft_messages_key],
         )
-        eval_dataset = eval_dataset.select(range(0, min(len(eval_dataset), dataset_config.sanity_check_max_samples)))
+        eval_dataset = eval_dataset.select(
+            range(0, min(len(eval_dataset), dataset_config.sanity_check_max_samples))
+        )
         with accelerator.main_process_first():
             eval_dataset = dataset_processor.tokenize(eval_dataset)
             eval_dataset = dataset_processor.filter(eval_dataset)
@@ -433,7 +489,9 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
             dataset_processor.get_token_length_visualization(
                 dataset_dict, save_path=f"runs/{args.run_name}/token_length.png"
             )
-            wandb.log({"token_length": wandb.Image(f"runs/{args.run_name}/token_length.png")})
+            wandb.log(
+                {"token_length": wandb.Image(f"runs/{args.run_name}/token_length.png")}
+            )
 
     # create the model and optimizer
     policy: PreTrainedModel = AutoModelForCausalLM.from_pretrained(
@@ -522,8 +580,12 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
             signal.signal(signal.SIGTERM, self.exit_gracefully)
 
         def exit_gracefully(self, signum, frame):
-            output_dir = os.path.join(args.checkpoint_output_dir, f"step_{training_step - 1}")
-            print(f"SIGTERM received, saving to {output_dir} from {accelerator.local_process_index}")
+            output_dir = os.path.join(
+                args.checkpoint_output_dir, f"step_{training_step - 1}"
+            )
+            print(
+                f"SIGTERM received, saving to {output_dir} from {accelerator.local_process_index}"
+            )
             accelerator.save_state(output_dir)
             if accelerator.is_main_process and args.with_tracking:
                 wandb.log({"preempted": True}, commit=True)
@@ -540,11 +602,17 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
     ph = PreemptionHandler()
 
     # deepspeed setup
-    is_deepspeed_enabled = getattr(accelerator.state, "deepspeed_plugin", None) is not None
+    is_deepspeed_enabled = (
+        getattr(accelerator.state, "deepspeed_plugin", None) is not None
+    )
     mixed_precision = accelerator.state.mixed_precision
     if is_deepspeed_enabled:
-        reward_model = prepare_deepspeed(reward_model, args.per_device_train_batch_size, mixed_precision)
-        ref_model = prepare_deepspeed(ref_model, args.per_device_train_batch_size, mixed_precision)
+        reward_model = prepare_deepspeed(
+            reward_model, args.per_device_train_batch_size, mixed_precision
+        )
+        ref_model = prepare_deepspeed(
+            ref_model, args.per_device_train_batch_size, mixed_precision
+        )
     else:
         reward_model = reward_model.to(device)
         ref_model = ref_model.to(device)
@@ -572,7 +640,9 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
         num_eval_samples = LOCAL_NUM_EVAL_SAMPLES * accelerator.num_processes
         sample_evaluation_prompt_token_ids = None
         if eval_dataset is not None:
-            sample_evaluation_prompt_token_ids = eval_dataset[:num_eval_samples][INPUT_IDS_PROMPT_KEY]
+            sample_evaluation_prompt_token_ids = eval_dataset[:num_eval_samples][
+                INPUT_IDS_PROMPT_KEY
+            ]
         thread = threading.Thread(
             target=vllm_generate,
             args=(
@@ -594,10 +664,16 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
         thread.start()
     torch.cuda.set_device(device)
 
-    g_vllm_responses = torch.zeros((args.batch_size, args.response_length), device=device, dtype=torch.long)
+    g_vllm_responses = torch.zeros(
+        (args.batch_size, args.response_length), device=device, dtype=torch.long
+    )
 
     # set up the metrics and initial states
-    stats_shape = (args.num_epochs, args.num_mini_batches, args.gradient_accumulation_steps)
+    stats_shape = (
+        args.num_epochs,
+        args.num_mini_batches,
+        args.gradient_accumulation_steps,
+    )
     loss_stats = torch.zeros(stats_shape, device=device)
     chosen_rewards_stats = torch.zeros(stats_shape, device=device)
     rejected_rewards_stats = torch.zeros(stats_shape, device=device)
@@ -629,9 +705,13 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
                 evaluation_responses = evaluation_Q.get(timeout=0.01)
                 print("🔥🔥🔥 Evaluation responses received")
                 table = {}
-                table["prompt"] = tokenizer.batch_decode(sample_evaluation_prompt_token_ids)
+                table["prompt"] = tokenizer.batch_decode(
+                    sample_evaluation_prompt_token_ids
+                )
                 table["response"] = tokenizer.batch_decode(evaluation_responses)
-                table["response"] = [item.replace(tokenizer.pad_token, "") for item in table["response"]]
+                table["response"] = [
+                    item.replace(tokenizer.pad_token, "") for item in table["response"]
+                ]
                 df = pd.DataFrame(table)
                 print_rich_table(df)
                 if args.with_tracking:
@@ -649,16 +729,32 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
                 if training_step != 1:
                     data = next(iter_dataloader)
                     queries_next = data[INPUT_IDS_PROMPT_KEY].to(device)
-                    queries_next = queries_next.repeat(args.num_generation_per_prompt, 1)
-                send_queries(accelerator, generation_model, tokenizer, param_prompt_Q, queries_next)
+                    queries_next = queries_next.repeat(
+                        args.num_generation_per_prompt, 1
+                    )
+                send_queries(
+                    accelerator,
+                    generation_model,
+                    tokenizer,
+                    param_prompt_Q,
+                    queries_next,
+                )
             else:
                 if training_step != 1:
                     # NOTE: important: the indent here is different for sync mode
                     # we also set to use `queries = queries_next` immediately
                     data = next(iter_dataloader)
                     queries_next = data[INPUT_IDS_PROMPT_KEY].to(device)
-                    queries_next = queries_next.repeat(args.num_generation_per_prompt, 1)
-                    send_queries(accelerator, generation_model, tokenizer, param_prompt_Q, queries_next)
+                    queries_next = queries_next.repeat(
+                        args.num_generation_per_prompt, 1
+                    )
+                    send_queries(
+                        accelerator,
+                        generation_model,
+                        tokenizer,
+                        param_prompt_Q,
+                        queries_next,
+                    )
                     queries = queries_next
 
             training_time_start = time.time()
@@ -673,15 +769,20 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
                     g_response_token_ids = response_ids_Q.get()
                     DUMMY_PAD_TOKEN = 0  # we can't use tokenizer.pad_token_id because it's outside vocab and `torch.gather(all_logprob, 2, response.unsqueeze(-1))` will error out
                     g_padded_response_ids = [
-                        response + [DUMMY_PAD_TOKEN] * (args.response_length - len(response))
+                        response
+                        + [DUMMY_PAD_TOKEN] * (args.response_length - len(response))
                         for response in g_response_token_ids
                     ]
                     for item in g_padded_response_ids:
                         assert len(item) == args.response_length
                         for inner_item in item:
                             if not inner_item < config.vocab_size:
-                                assert inner_item < config.vocab_size, f"{inner_item=}, {tokenizer.vocab_size=}"
-                    g_padded_response_ids = torch.tensor(g_padded_response_ids, device=device)
+                                assert (
+                                    inner_item < config.vocab_size
+                                ), f"{inner_item=}, {tokenizer.vocab_size=}"
+                    g_padded_response_ids = torch.tensor(
+                        g_padded_response_ids, device=device
+                    )
                     g_vllm_responses[:] = g_padded_response_ids
                 broadcast(g_vllm_responses, 0)
                 local_vllm_responses = g_vllm_responses[
@@ -690,31 +791,51 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
                     * queries.shape[0]
                 ]
                 query_responses = torch.cat((queries, local_vllm_responses), 1)
-                for i in range(0, queries.shape[0], args.local_rollout_forward_batch_size):
+                for i in range(
+                    0, queries.shape[0], args.local_rollout_forward_batch_size
+                ):
                     query = queries[i : i + args.local_rollout_forward_batch_size]
-                    query_response = query_responses[i : i + args.local_rollout_forward_batch_size]
+                    query_response = query_responses[
+                        i : i + args.local_rollout_forward_batch_size
+                    ]
                     response = query_response[:, context_length:]
 
-                    ref_output = forward(ref_model, query_response, tokenizer.pad_token_id)
+                    ref_output = forward(
+                        ref_model, query_response, tokenizer.pad_token_id
+                    )
                     ref_logits = ref_output.logits[:, context_length - 1 : -1]
                     ref_logits /= args.temperature + 1e-7
                     ref_all_logprob = F.log_softmax(ref_logits, dim=-1)
-                    ref_logprob = torch.gather(ref_all_logprob, 2, response.unsqueeze(-1)).squeeze(-1)
+                    ref_logprob = torch.gather(
+                        ref_all_logprob, 2, response.unsqueeze(-1)
+                    ).squeeze(-1)
                     del ref_output, ref_logits, ref_all_logprob
                     torch.cuda.empty_cache()
 
                     # Response Processing 1. truncate response after the first occurrence of `stop_token_id`
                     postprocessed_response = response
-                    if args.stop_token_id is not None:  # handle the edge case when stop_token_id exists but is 0
+                    if (
+                        args.stop_token_id is not None
+                    ):  # handle the edge case when stop_token_id exists but is 0
                         postprocessed_response = truncate_response(
                             args.stop_token_id, tokenizer.pad_token_id, response
                         )
 
                     # Response Processing 2. run reward model on the truncated responses
-                    postprocessed_query_response = torch.cat((query, postprocessed_response), 1)
-                    sequence_length = first_true_indices(postprocessed_response == tokenizer.pad_token_id) - 1
+                    postprocessed_query_response = torch.cat(
+                        (query, postprocessed_response), 1
+                    )
+                    sequence_length = (
+                        first_true_indices(
+                            postprocessed_response == tokenizer.pad_token_id
+                        )
+                        - 1
+                    )
                     _, score, _ = get_reward(
-                        reward_model, postprocessed_query_response, tokenizer.pad_token_id, context_length
+                        reward_model,
+                        postprocessed_query_response,
+                        tokenizer.pad_token_id,
+                        context_length,
                     )
 
                     responses.append(response)
@@ -735,19 +856,29 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
                 # Response Processing 3. filter response. Ensure that the sample contains stop_token_id
                 # responses not passing that filter will receive a low (fixed) score
                 # only query humans on responses that pass that filter
-                contain_stop_token = torch.any(postprocessed_responses == args.stop_token_id, dim=-1)
+                contain_stop_token = torch.any(
+                    postprocessed_responses == args.stop_token_id, dim=-1
+                )
                 # NOTE: only apply the stop token filter if the response is long enough
                 # otherwise the model could learn to generate the first token as the stop token
-                contain_stop_token = contain_stop_token & (sequence_lengths >= args.min_response_length)
+                contain_stop_token = contain_stop_token & (
+                    sequence_lengths >= args.min_response_length
+                )
                 if args.non_stop_penalty:
                     scores = torch.where(
-                        contain_stop_token, scores, torch.full_like(scores, args.penalty_reward_value)
+                        contain_stop_token,
+                        scores,
+                        torch.full_like(scores, args.penalty_reward_value),
                     )
 
                 # be very careful with `padding_mask_p1`; see https://excalidraw.com/#json=LWnzG4w2k5DjF_EOL_xPt,e2w3a-hFJ_gX5vOfeyXGTw
-                response_idxs = torch.arange(responses.shape[1], device=responses.device).repeat(responses.shape[0], 1)
+                response_idxs = torch.arange(
+                    responses.shape[1], device=responses.device
+                ).repeat(responses.shape[0], 1)
                 padding_mask = response_idxs > sequence_lengths.unsqueeze(1)
-                ref_logprobs = torch.masked_fill(ref_logprobs, padding_mask, INVALID_LOGPROB)
+                ref_logprobs = torch.masked_fill(
+                    ref_logprobs, padding_mask, INVALID_LOGPROB
+                )
 
                 # num_examples should be same as args.local_batch_size divided by 2
                 num_examples = scores.size(0) // 2
@@ -756,10 +887,14 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
 
                 num_examples_range = torch.arange(num_examples).to(scores.device)
                 chosen_indices = torch.where(
-                    first_half >= second_half, num_examples_range.clone(), num_examples_range.clone() + num_examples
+                    first_half >= second_half,
+                    num_examples_range.clone(),
+                    num_examples_range.clone() + num_examples,
                 )
                 rejected_indices = torch.where(
-                    first_half < second_half, num_examples_range.clone(), num_examples_range.clone() + num_examples
+                    first_half < second_half,
+                    num_examples_range.clone(),
+                    num_examples_range.clone() + num_examples,
                 )
                 scores_margin = scores[chosen_indices] - scores[rejected_indices]
 
@@ -767,14 +902,19 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
         concat_indices = []
         # Do multiple epochs of training on on-policy data (PPO-style), with a fresh random shuffle in each epoch
         for epoch_idx in range(args.num_epochs):
-            b_inds = np.random.permutation(args.local_batch_size // args.num_generation_per_prompt)
+            b_inds = np.random.permutation(
+                args.local_batch_size // args.num_generation_per_prompt
+            )
             minibatch_idx = 0
             for mini_batch_start in range(
                 0,
                 args.local_batch_size // args.num_generation_per_prompt,
                 args.local_mini_batch_size // args.num_generation_per_prompt,
             ):
-                mini_batch_end = mini_batch_start + args.local_mini_batch_size // args.num_generation_per_prompt
+                mini_batch_end = (
+                    mini_batch_start
+                    + args.local_mini_batch_size // args.num_generation_per_prompt
+                )
                 mini_batch_inds = b_inds[mini_batch_start:mini_batch_end]
                 gradient_accumulation_idx = 0
                 for micro_batch_start in range(
@@ -783,16 +923,24 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
                     args.per_device_train_batch_size,
                 ):
                     with accelerator.accumulate(model):
-                        micro_batch_end = micro_batch_start + args.per_device_train_batch_size
-                        micro_batch_inds = mini_batch_inds[micro_batch_start:micro_batch_end]
+                        micro_batch_end = (
+                            micro_batch_start + args.per_device_train_batch_size
+                        )
+                        micro_batch_inds = mini_batch_inds[
+                            micro_batch_start:micro_batch_end
+                        ]
                         chosen_mb_inds = chosen_indices[micro_batch_inds]
                         chosen_responses = responses[chosen_mb_inds]
                         rejected_mb_inds = rejected_indices[micro_batch_inds]
                         rejected_responses = responses[rejected_mb_inds]
 
-                        concat_mb_inds = torch.cat((chosen_mb_inds, rejected_mb_inds), dim=0)
+                        concat_mb_inds = torch.cat(
+                            (chosen_mb_inds, rejected_mb_inds), dim=0
+                        )
                         concat_query_responses = query_responses[concat_mb_inds]
-                        concat_output = forward(model, concat_query_responses, tokenizer.pad_token_id)
+                        concat_output = forward(
+                            model, concat_query_responses, tokenizer.pad_token_id
+                        )
                         num_examples = chosen_mb_inds.shape[0]
                         chosen_logits = concat_output.logits[:num_examples]
                         rejected_logits = concat_output.logits[num_examples:]
@@ -801,15 +949,21 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
                         chosen_logits = chosen_logits[:, context_length - 1 : -1]
                         chosen_logits /= args.temperature + 1e-7
                         chosen_all_logprobs = F.log_softmax(chosen_logits, dim=-1)
-                        chosen_logprobs = torch.gather(chosen_all_logprobs, 2, chosen_responses.unsqueeze(-1)).squeeze(
-                            -1
-                        )
+                        chosen_logprobs = torch.gather(
+                            chosen_all_logprobs, 2, chosen_responses.unsqueeze(-1)
+                        ).squeeze(-1)
                         chosen_logprobs = torch.masked_fill(
-                            chosen_logprobs, padding_mask[chosen_mb_inds], INVALID_LOGPROB
+                            chosen_logprobs,
+                            padding_mask[chosen_mb_inds],
+                            INVALID_LOGPROB,
                         )
                         chosen_ref_logprobs = ref_logprobs[chosen_mb_inds]
-                        chosen_logprobs_sum = (chosen_logprobs * ~padding_mask[chosen_mb_inds]).sum(1)
-                        chosen_ref_logprobs_sum = (chosen_ref_logprobs * ~padding_mask[chosen_mb_inds]).sum(1)
+                        chosen_logprobs_sum = (
+                            chosen_logprobs * ~padding_mask[chosen_mb_inds]
+                        ).sum(1)
+                        chosen_ref_logprobs_sum = (
+                            chosen_ref_logprobs * ~padding_mask[chosen_mb_inds]
+                        ).sum(1)
 
                         # rejected
                         rejected_logits = rejected_logits[:, context_length - 1 : -1]
@@ -819,14 +973,22 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
                             rejected_all_logprobs, 2, rejected_responses.unsqueeze(-1)
                         ).squeeze(-1)
                         rejected_logprobs = torch.masked_fill(
-                            rejected_logprobs, padding_mask[rejected_mb_inds], INVALID_LOGPROB
+                            rejected_logprobs,
+                            padding_mask[rejected_mb_inds],
+                            INVALID_LOGPROB,
                         )
                         rejected_ref_logprobs = ref_logprobs[rejected_mb_inds]
-                        rejected_logprobs_sum = (rejected_logprobs * ~padding_mask[rejected_mb_inds]).sum(1)
-                        rejected_ref_logprobs_sum = (rejected_ref_logprobs * ~padding_mask[rejected_mb_inds]).sum(1)
+                        rejected_logprobs_sum = (
+                            rejected_logprobs * ~padding_mask[rejected_mb_inds]
+                        ).sum(1)
+                        rejected_ref_logprobs_sum = (
+                            rejected_ref_logprobs * ~padding_mask[rejected_mb_inds]
+                        ).sum(1)
 
                         pi_logratios = chosen_logprobs_sum - rejected_logprobs_sum
-                        ref_logratios = chosen_ref_logprobs_sum - rejected_ref_logprobs_sum
+                        ref_logratios = (
+                            chosen_ref_logprobs_sum - rejected_ref_logprobs_sum
+                        )
 
                         logits = pi_logratios - ref_logratios
 
@@ -835,7 +997,9 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
                         elif args.loss_type == "ipo":
                             losses = (logits - 1 / (2 * args.beta)) ** 2
                         else:
-                            raise NotImplementedError(f"invalid loss type {args.loss_type}")
+                            raise NotImplementedError(
+                                f"invalid loss type {args.loss_type}"
+                            )
 
                         loss = losses.mean()
                         accelerator.backward(loss)
@@ -845,28 +1009,42 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
                             if epoch_idx == 0:
                                 concat_indices.append(concat_mb_inds)
                                 response = concat_query_responses[:, context_length:]
-                                logits = concat_output.logits[:, context_length - 1 : -1]
+                                logits = concat_output.logits[
+                                    :, context_length - 1 : -1
+                                ]
                                 logits /= args.temperature + 1e-7
                                 all_logprob = F.log_softmax(logits, dim=-1)
-                                logprob = torch.gather(all_logprob, 2, response.unsqueeze(-1)).squeeze(-1)
-                                logprob = torch.masked_fill(logprob, padding_mask[concat_mb_inds], INVALID_LOGPROB)
+                                logprob = torch.gather(
+                                    all_logprob, 2, response.unsqueeze(-1)
+                                ).squeeze(-1)
+                                logprob = torch.masked_fill(
+                                    logprob,
+                                    padding_mask[concat_mb_inds],
+                                    INVALID_LOGPROB,
+                                )
                                 logprobs.append(logprob)
                                 del all_logprob
-                            chosen_rewards = args.beta * (chosen_logprobs_sum - chosen_ref_logprobs_sum)
-                            rejected_rewards = args.beta * (rejected_logprobs_sum - rejected_ref_logprobs_sum)
-                            loss_stats[epoch_idx, minibatch_idx, gradient_accumulation_idx] = loss
-                            chosen_rewards_stats[epoch_idx, minibatch_idx, gradient_accumulation_idx] = (
-                                chosen_rewards.mean()
+                            chosen_rewards = args.beta * (
+                                chosen_logprobs_sum - chosen_ref_logprobs_sum
                             )
-                            rejected_rewards_stats[epoch_idx, minibatch_idx, gradient_accumulation_idx] = (
-                                rejected_rewards.mean()
+                            rejected_rewards = args.beta * (
+                                rejected_logprobs_sum - rejected_ref_logprobs_sum
                             )
-                            chosen_logprobs_stats[epoch_idx, minibatch_idx, gradient_accumulation_idx] = (
-                                chosen_logprobs_sum.mean()
-                            )
-                            rejected_logprobs_stats[epoch_idx, minibatch_idx, gradient_accumulation_idx] = (
-                                rejected_logprobs_sum.mean()
-                            )
+                            loss_stats[
+                                epoch_idx, minibatch_idx, gradient_accumulation_idx
+                            ] = loss
+                            chosen_rewards_stats[
+                                epoch_idx, minibatch_idx, gradient_accumulation_idx
+                            ] = chosen_rewards.mean()
+                            rejected_rewards_stats[
+                                epoch_idx, minibatch_idx, gradient_accumulation_idx
+                            ] = rejected_rewards.mean()
+                            chosen_logprobs_stats[
+                                epoch_idx, minibatch_idx, gradient_accumulation_idx
+                            ] = chosen_logprobs_sum.mean()
+                            rejected_logprobs_stats[
+                                epoch_idx, minibatch_idx, gradient_accumulation_idx
+                            ] = rejected_logprobs_sum.mean()
                     gradient_accumulation_idx += 1
                 minibatch_idx += 1
                 # fmt: off
@@ -898,13 +1076,17 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
             local_metrics[8] = loss_stats.mean()
             local_metrics[9] = chosen_rewards_stats.mean()
             local_metrics[10] = rejected_rewards_stats.mean()
-            local_metrics[11] = (chosen_rewards_stats > rejected_rewards_stats).float().mean()
+            local_metrics[11] = (
+                (chosen_rewards_stats > rejected_rewards_stats).float().mean()
+            )
             local_metrics[12] = (chosen_rewards_stats - rejected_rewards_stats).mean()
             local_metrics[13] = chosen_logprobs_stats.mean()
             local_metrics[14] = rejected_logprobs_stats.mean()
             local_metrics[15] = ((kl) ** 2 / 2).sum(1).mean()
             local_metrics[16] = ((-kl).exp() - 1 + kl).sum(1).mean()
-            global_metrics = accelerator.reduce(local_metrics, reduction="mean").tolist()
+            global_metrics = accelerator.reduce(
+                local_metrics, reduction="mean"
+            ).tolist()
             metrics = {
                 "episode": episode,
                 "training_step": training_step,
@@ -934,7 +1116,15 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
                 print_rich_single_line_metrics(metrics)
                 for key, value in metrics.items():
                     writer.add_scalar(key, value, episode)
-        del (queries, responses, postprocessed_responses, logprobs, ref_logprobs, sequence_lengths, scores)
+        del (
+            queries,
+            responses,
+            postprocessed_responses,
+            logprobs,
+            ref_logprobs,
+            sequence_lengths,
+            scores,
+        )
         del (metrics, kl, non_score_reward, rlhf_reward)
         gc.collect()
         torch.cuda.empty_cache()
@@ -971,10 +1161,14 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
                     metadata_blob,
                     "metadata.json",
                     args.hf_metadata_dataset,
-                    "results/" + args.hf_repo_revision,  # to match what the auto-evals name as.
+                    "results/"
+                    + args.hf_repo_revision,  # to match what the auto-evals name as.
                 )
 
-            if args.try_launch_beaker_eval_jobs and len(beaker_config.beaker_dataset_id_urls) > 0:
+            if (
+                args.try_launch_beaker_eval_jobs
+                and len(beaker_config.beaker_dataset_id_urls) > 0
+            ):
                 command = f"""\
                 python mason.py  \
                     --cluster ai2/allennlp-cirrascale ai2/general-cirrascale-a5000 ai2/general-cirrascale-a5000 ai2/s2-cirrascale ai2/general-cirrascale \
@@ -989,11 +1183,21 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
                 --upload_to_hf {args.hf_metadata_dataset} \
                     --model_name {args.hf_repo_revision}
                 """
-                process = subprocess.Popen(["bash", "-c", command], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                process = subprocess.Popen(
+                    ["bash", "-c", command],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
                 stdout, stderr = process.communicate()
-                print(f"Submit jobs after model training is finished - Stdout:\n{stdout.decode()}")
-                print(f"Submit jobs after model training is finished - Stderr:\n{stderr.decode()}")
-                print(f"Submit jobs after model training is finished - process return code: {process.returncode}")
+                print(
+                    f"Submit jobs after model training is finished - Stdout:\n{stdout.decode()}"
+                )
+                print(
+                    f"Submit jobs after model training is finished - Stderr:\n{stderr.decode()}"
+                )
+                print(
+                    f"Submit jobs after model training is finished - process return code: {process.returncode}"
+                )
 
         if args.push_to_hub:
             push_folder_to_hub(

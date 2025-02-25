@@ -29,7 +29,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Process Tulu 2.5 preference data and optionally upload to Hugging Face Hub."
     )
-    parser.add_argument("--push_to_hub", action="store_true", help="Upload the dataset to Hugging Face Hub")
+    parser.add_argument(
+        "--push_to_hub",
+        action="store_true",
+        help="Upload the dataset to Hugging Face Hub",
+    )
     parser.add_argument(
         "--hf_entity",
         type=str,

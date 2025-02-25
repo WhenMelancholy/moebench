@@ -40,7 +40,7 @@ spec = ExperimentSpec(
                 ),
                 beaker.EnvVar(
                     name="HF_HOME",
-                    value="/net/nfs.cirrascale/allennlp/davidw/cache/huggingface"
+                    value="/net/nfs.cirrascale/allennlp/davidw/cache/huggingface",
                 ),
             ],
             resources=beaker.TaskResources(gpu_count=1),

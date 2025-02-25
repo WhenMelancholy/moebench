@@ -64,7 +64,9 @@ def is_openai_format(messages: Any) -> bool:
     Returns:
         `bool`: Whether the messages are in OpenAI format.
     """
-    if isinstance(messages, list) and all(isinstance(message, dict) for message in messages):
+    if isinstance(messages, list) and all(
+        isinstance(message, dict) for message in messages
+    ):
         return all("role" in message and "content" in message for message in messages)
     return False
 
@@ -158,7 +160,10 @@ def conversations_to_messages(example):
         "User": "user",
         "human": "user",
     }
-    messages = [{"role": name_mapping[conv["from"]], "content": conv["value"]} for conv in example["conversations"]]
+    messages = [
+        {"role": name_mapping[conv["from"]], "content": conv["value"]}
+        for conv in example["conversations"]
+    ]
     example["messages"] = messages
     return example
 
@@ -212,11 +217,15 @@ def get_datasets(
             Whether to add a column to the dataset that indicates the source of the data explicitly.
     """
     if isinstance(dataset_mixer, list):
-        assert len(dataset_mixer) % 2 == 0, f"Data mixer list length is not even: {dataset_mixer}"
+        assert (
+            len(dataset_mixer) % 2 == 0
+        ), f"Data mixer list length is not even: {dataset_mixer}"
         mixer_dict = {}
         i = 0
         while i < len(dataset_mixer) - 1:
-            assert isinstance(dataset_mixer[i], str), f"Invalid type in data mixer: {dataset_mixer}"
+            assert isinstance(
+                dataset_mixer[i], str
+            ), f"Invalid type in data mixer: {dataset_mixer}"
             if "." in dataset_mixer[i + 1]:
                 value = float(dataset_mixer[i + 1])
             else:
@@ -230,7 +239,9 @@ def get_datasets(
     columns_to_keep = [] if columns_to_keep is None else columns_to_keep
 
     if configs is not None and len(configs) != len(dataset_mixer):
-        raise ValueError("The number of given dataset config names must be the same as the given number of datasets.")
+        raise ValueError(
+            "The number of given dataset config names must be the same as the given number of datasets."
+        )
 
     # print save location
     if save_data_dir:
@@ -261,7 +272,9 @@ def get_datasets(
             # assert that needed columns are present
             if need_columns:
                 if not all(col in dataset.column_names for col in need_columns):
-                    raise ValueError(f"Needed column {need_columns} not found in dataset {dataset.column_names}.")
+                    raise ValueError(
+                        f"Needed column {need_columns} not found in dataset {dataset.column_names}."
+                    )
 
             # handle per-case conversions
             # if "instruction" and "output" columns are present and "messages" is not, convert to messages
@@ -277,7 +290,10 @@ def get_datasets(
                 and "messages" not in dataset.column_names
             ):
                 dataset = dataset.map(convert_code_alpaca_to_messages, num_proc=10)
-            elif "conversations" in dataset.column_names and "messages" not in dataset.column_names:
+            elif (
+                "conversations" in dataset.column_names
+                and "messages" not in dataset.column_names
+            ):
                 dataset = dataset.map(conversations_to_messages, num_proc=10)
             elif (
                 "question" in dataset.column_names
@@ -290,7 +306,9 @@ def get_datasets(
                 and "answer" in dataset.column_names
                 and "messages" not in dataset.column_names
             ):
-                dataset = dataset.map(convert_codefeedback_single_turn_to_messages, num_proc=10)
+                dataset = dataset.map(
+                    convert_codefeedback_single_turn_to_messages, num_proc=10
+                )
             elif (
                 "query" in dataset.column_names
                 and "response" in dataset.column_names
@@ -303,7 +321,9 @@ def get_datasets(
                 and "reference_completion" in dataset.column_names
                 and "messages" not in dataset.column_names
             ):
-                dataset = dataset.map(convert_rejection_samples_to_messages, num_proc=10)
+                dataset = dataset.map(
+                    convert_rejection_samples_to_messages, num_proc=10
+                )
 
             # if id not in dataset, create it as ds-{index}
             if "id" not in dataset.column_names:
@@ -312,7 +332,11 @@ def get_datasets(
 
             # Remove redundant columns to avoid schema conflicts on load
             dataset = dataset.remove_columns(
-                [col for col in dataset.column_names if col not in (columns_to_keep + ["id"])]
+                [
+                    col
+                    for col in dataset.column_names
+                    if col not in (columns_to_keep + ["id"])
+                ]
             )
 
             # if add_source_col, add that column
@@ -331,7 +355,9 @@ def get_datasets(
             elif "test" in split:
                 raw_val_datasets.append(dataset)
             else:
-                raise ValueError(f"Split type {split} not recognized as one of test or train.")
+                raise ValueError(
+                    f"Split type {split} not recognized as one of test or train."
+                )
 
     if len(raw_val_datasets) == 0 and len(raw_train_datasets) == 0:
         raise ValueError("No datasets loaded.")
@@ -349,7 +375,9 @@ def get_datasets(
     if any(frac_or_samples > 1 for frac_or_samples in frac_or_sample_list):
         is_count = True
         # assert that all are integers
-        if not all(isinstance(frac_or_samples, int) for frac_or_samples in frac_or_sample_list):
+        if not all(
+            isinstance(frac_or_samples, int) for frac_or_samples in frac_or_sample_list
+        ):
             raise NotImplementedError("Cannot mix fractions and counts, yet.")
     else:
         is_count = False
@@ -364,7 +392,9 @@ def get_datasets(
             if is_count:
                 train_subset = dataset.select(range(frac_or_samples))
             else:
-                train_subset = dataset.select(range(int(frac_or_samples * len(dataset))))
+                train_subset = dataset.select(
+                    range(int(frac_or_samples * len(dataset)))
+                )
             train_subsets.append(train_subset)
 
         raw_datasets["train"] = concatenate_datasets(train_subsets)
@@ -431,13 +461,19 @@ def combine_dataset(
             Whether to keep ids for training that are added during mixing.
             Used primarily in mix_data.py for saving, or the saved dataset has IDs already.
     """
-    assert len(splits) == len(dataset_mixer), "Number of splits must match the number of datasets."
+    assert len(splits) == len(
+        dataset_mixer
+    ), "Number of splits must match the number of datasets."
     if isinstance(dataset_mixer, list):
-        assert len(dataset_mixer) % 2 == 0, f"Data mixer list length is not even: {dataset_mixer}"
+        assert (
+            len(dataset_mixer) % 2 == 0
+        ), f"Data mixer list length is not even: {dataset_mixer}"
         mixer_dict = {}
         i = 0
         while i < len(dataset_mixer) - 1:
-            assert isinstance(dataset_mixer[i], str), f"Invalid type in data mixer: {dataset_mixer}"
+            assert isinstance(
+                dataset_mixer[i], str
+            ), f"Invalid type in data mixer: {dataset_mixer}"
             if "." in dataset_mixer[i + 1]:
                 value = float(dataset_mixer[i + 1])
             else:
@@ -453,14 +489,18 @@ def combine_dataset(
     columns_to_keep = [] if columns_to_keep is None else columns_to_keep
 
     if configs is not None and len(configs) != len(dataset_mixer):
-        raise ValueError("The number of given dataset config names must be the same as the given number of datasets.")
+        raise ValueError(
+            "The number of given dataset config names must be the same as the given number of datasets."
+        )
 
     # print save location
     if save_data_dir:
         print(f"Saving mixed dataset to {save_data_dir}")
 
     datasets = []
-    for (ds, frac_or_samples), ds_config, split in zip(dataset_mixer.items(), configs, splits):
+    for (ds, frac_or_samples), ds_config, split in zip(
+        dataset_mixer.items(), configs, splits
+    ):
         # if dataset ends with .json or .jsonl, load from file
         if ds.endswith(".json") or ds.endswith(".jsonl"):
             dataset = load_dataset("json", data_files=ds, split=split)
@@ -490,7 +530,11 @@ def combine_dataset(
 
         # Remove redundant columns to avoid schema conflicts on load
         dataset = dataset.remove_columns(
-            [col for col in dataset.column_names if col not in (columns_to_keep + ["id"])]
+            [
+                col
+                for col in dataset.column_names
+                if col not in (columns_to_keep + ["id"])
+            ]
         )
         datasets.append(dataset)
 
@@ -511,7 +555,9 @@ def combine_dataset(
 # ----------------------------------------------------------------------------
 # Arguments utilities
 class ArgumentParserPlus(HfArgumentParser):
-    def parse_yaml_and_args(self, yaml_arg: str, other_args: Optional[List[str]] = None) -> List[dataclass]:
+    def parse_yaml_and_args(
+        self, yaml_arg: str, other_args: Optional[List[str]] = None
+    ) -> List[dataclass]:
         """
         Parse a YAML file and overwrite the default/loaded values with the values provided to the command line.
 
@@ -528,7 +574,9 @@ class ArgumentParserPlus(HfArgumentParser):
 
         outputs = []
         # strip other args list into dict of key-value pairs
-        other_args = {arg.split("=")[0].strip("-"): arg.split("=")[1] for arg in other_args}
+        other_args = {
+            arg.split("=")[0].strip("-"): arg.split("=")[1] for arg in other_args
+        }
         used_args = {}
 
         # overwrite the default/loaded value with the value provided to the command line
@@ -561,7 +609,9 @@ class ArgumentParserPlus(HfArgumentParser):
                     if arg not in used_args:
                         used_args[arg] = val
                     else:
-                        raise ValueError(f"Duplicate argument provided: {arg}, may cause unexpected behavior")
+                        raise ValueError(
+                            f"Duplicate argument provided: {arg}, may cause unexpected behavior"
+                        )
 
             obj = data_class(**inputs)
             outputs.append(obj)
@@ -575,7 +625,9 @@ class ArgumentParserPlus(HfArgumentParser):
             output = self.parse_yaml_file(os.path.abspath(sys.argv[1]))
         # parse command line args and yaml file
         elif len(sys.argv) > 2 and sys.argv[1].endswith(".yaml"):
-            output = self.parse_yaml_and_args(os.path.abspath(sys.argv[1]), sys.argv[2:])
+            output = self.parse_yaml_and_args(
+                os.path.abspath(sys.argv[1]), sys.argv[2:]
+            )
         # parse command line args only
         else:
             output = self.parse_args_into_dataclasses()
@@ -592,7 +644,11 @@ def get_git_tag() -> str:
     git_tag = ""
     try:
         git_tag = (
-            subprocess.check_output(["git", "describe", "--tags"], stderr=subprocess.DEVNULL).decode("ascii").strip()
+            subprocess.check_output(
+                ["git", "describe", "--tags"], stderr=subprocess.DEVNULL
+            )
+            .decode("ascii")
+            .strip()
         )
     except subprocess.CalledProcessError as e:
         logging.debug(f"Failed to get Git tag: {e}")
@@ -601,12 +657,16 @@ def get_git_tag() -> str:
     if len(git_tag) == 0:
         try:
             count = int(
-                subprocess.check_output(["git", "rev-list", "--count", "HEAD"], stderr=subprocess.DEVNULL)
+                subprocess.check_output(
+                    ["git", "rev-list", "--count", "HEAD"], stderr=subprocess.DEVNULL
+                )
                 .decode("ascii")
                 .strip()
             )
             hash = (
-                subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL)
+                subprocess.check_output(
+                    ["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL
+                )
                 .decode("ascii")
                 .strip()
             )
@@ -622,12 +682,16 @@ def get_pr_tag() -> str:
     pr_tag = ""
     try:
         git_commit = (
-            subprocess.check_output(["git", "rev-parse", "--verify", "HEAD"], stderr=subprocess.DEVNULL)
+            subprocess.check_output(
+                ["git", "rev-parse", "--verify", "HEAD"], stderr=subprocess.DEVNULL
+            )
             .decode("ascii")
             .strip()
         )
         # try finding the pull request number on github
-        prs = requests.get(f"https://api.github.com/search/issues?q=repo:allenai/open-instruct+is:pr+{git_commit}")
+        prs = requests.get(
+            f"https://api.github.com/search/issues?q=repo:allenai/open-instruct+is:pr+{git_commit}"
+        )
         if prs.status_code == 200:
             prs = prs.json()
             if len(prs["items"]) > 0:
@@ -645,7 +709,9 @@ def get_wandb_tags() -> List[str]:
     existing_wandb_tags = os.environ.get("WANDB_TAGS", "")
     git_tag = get_git_tag()
     pr_tag = get_pr_tag()
-    non_empty_tags = [tag for tag in [existing_wandb_tags, git_tag, pr_tag] if len(tag) > 0]
+    non_empty_tags = [
+        tag for tag in [existing_wandb_tags, git_tag, pr_tag] if len(tag) > 0
+    ]
     return non_empty_tags
 
 
@@ -663,7 +729,11 @@ def get_last_checkpoint(folder: str, incomplete: bool = False) -> Optional[str]:
     else:
         checkpoints = checkpoint_steps
     if not incomplete:
-        checkpoints = [path for path in checkpoints if os.path.exists(os.path.join(folder, path, "COMPLETED"))]
+        checkpoints = [
+            path
+            for path in checkpoints
+            if os.path.exists(os.path.join(folder, path, "COMPLETED"))
+        ]
     if len(checkpoints) == 0:
         return
     return os.path.join(folder, max(checkpoints, key=lambda x: int(x.split("_")[-1])))
@@ -675,17 +745,27 @@ def get_last_checkpoint_path(args, incomplete: bool = False) -> str:
     # else, start from scratch.
     # if incomplete is true, include folders without "COMPLETE" in the folder.
     last_checkpoint_path = None
-    if args.output_dir and os.path.isdir(args.output_dir) and not args.overwrite_output_dir:
-        last_checkpoint_path = get_last_checkpoint(args.output_dir, incomplete=incomplete)
+    if (
+        args.output_dir
+        and os.path.isdir(args.output_dir)
+        and not args.overwrite_output_dir
+    ):
+        last_checkpoint_path = get_last_checkpoint(
+            args.output_dir, incomplete=incomplete
+        )
         if last_checkpoint_path is None:
-            logger.warning("Output directory exists but no checkpoint found. Starting from scratch.")
+            logger.warning(
+                "Output directory exists but no checkpoint found. Starting from scratch."
+            )
     elif args.resume_from_checkpoint:
         last_checkpoint_path = args.resume_from_checkpoint
     return last_checkpoint_path
 
 
 def is_checkpoint_folder(dir: str, folder: str) -> bool:
-    return (folder.startswith("step_") or folder.startswith("epoch_")) and os.path.isdir(os.path.join(dir, folder))
+    return (
+        folder.startswith("step_") or folder.startswith("epoch_")
+    ) and os.path.isdir(os.path.join(dir, folder))
 
 
 def clean_last_n_checkpoints(output_dir: str, keep_last_n_checkpoints: int) -> None:
@@ -717,7 +797,11 @@ def is_beaker_job() -> bool:
 
 def get_beaker_experiment_info(experiment_id: str) -> Optional[dict]:
     get_experiment_command = f"beaker experiment get {experiment_id} --format json"
-    process = subprocess.Popen(["bash", "-c", get_experiment_command], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    process = subprocess.Popen(
+        ["bash", "-c", get_experiment_command],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
     stdout, stderr = process.communicate()
     if process.returncode != 0:
         print(f"Failed to get Beaker experiment: {stderr}")
@@ -735,7 +819,9 @@ def beaker_experiment_succeeded(experiment_id: str) -> bool:
         return False
     pprint(experiment)
     finalizeds = [
-        "finalized" in job["status"] and "exitCode" in job["status"] and job["status"]["exitCode"] == 0
+        "finalized" in job["status"]
+        and "exitCode" in job["status"]
+        and job["status"]["exitCode"] == 0
         for job in experiment["jobs"]
     ]
     pprint(finalizeds)
@@ -758,7 +844,11 @@ def get_beaker_dataset_ids(experiment_id: str, sort=False) -> Optional[List[str]
     dataset_infos = []
     for result_id in result_ids:
         get_dataset_command = f"beaker dataset get {result_id} --format json"
-        process = subprocess.Popen(["bash", "-c", get_dataset_command], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        process = subprocess.Popen(
+            ["bash", "-c", get_dataset_command],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
         stdout, stderr = process.communicate()
         if process.returncode != 0:
             print(f"Failed to get Beaker dataset: {stderr}")
@@ -770,7 +860,9 @@ def get_beaker_dataset_ids(experiment_id: str, sort=False) -> Optional[List[str]
                     id=dataset["id"],
                     committed=dataset["committed"],
                     non_empty=(
-                        False if dataset["storage"]["totalSize"] is None else dataset["storage"]["totalSize"] > 0
+                        False
+                        if dataset["storage"]["totalSize"] is None
+                        else dataset["storage"]["totalSize"] > 0
                     ),
                 )
                 for dataset in datasets
@@ -786,7 +878,9 @@ def get_beaker_dataset_ids(experiment_id: str, sort=False) -> Optional[List[str]
 def get_beaker_whoami() -> Optional[str]:
     get_beaker_whoami_command = "beaker account whoami --format json"
     process = subprocess.Popen(
-        ["bash", "-c", get_beaker_whoami_command], stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        ["bash", "-c", get_beaker_whoami_command],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
     stdout, stderr = process.communicate()
     if process.returncode != 0:
@@ -802,7 +896,9 @@ def maybe_get_beaker_config():
     if beaker_dataset_ids is None:
         beaker_dataset_id_urls = []
     else:
-        beaker_dataset_id_urls = [f"https://beaker.org/ds/{dataset_id}" for dataset_id in beaker_dataset_ids]
+        beaker_dataset_id_urls = [
+            f"https://beaker.org/ds/{dataset_id}" for dataset_id in beaker_dataset_ids
+        ]
     return BeakerRuntimeConfig(
         beaker_workload_id=os.environ["BEAKER_WORKLOAD_ID"],
         beaker_node_hostname=os.environ["BEAKER_NODE_HOSTNAME"],
@@ -838,7 +934,9 @@ def retry_on_exception(max_attempts=4, delay=1, backoff=2):
                     attempts += 1
                     if attempts == max_attempts:
                         raise e
-                    print(f"Attempt {attempts} failed. Retrying in {local_delay} seconds...")
+                    print(
+                        f"Attempt {attempts} failed. Retrying in {local_delay} seconds..."
+                    )
                     time.sleep(local_delay)
                     local_delay *= backoff
             return None

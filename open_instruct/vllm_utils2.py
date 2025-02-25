@@ -48,7 +48,9 @@ def init_process_group(
     group_name: str = None,
     pg_options: Optional[Any] = None,
 ):
-    assert (store is None) or (init_method is None), "Cannot specify both init_method and store."
+    assert (store is None) or (
+        init_method is None
+    ), "Cannot specify both init_method and store."
 
     if store is not None:
         assert world_size > 0, "world_size must be positive if using store"
@@ -91,9 +93,19 @@ def init_process_group(
 
 
 class WorkerWrap(Worker):
-    def init_process_group(self, master_address, master_port, rank_offset, world_size, group_name, backend="nccl"):
+    def init_process_group(
+        self,
+        master_address,
+        master_port,
+        rank_offset,
+        world_size,
+        group_name,
+        backend="nccl",
+    ):
         """Init torch process group for model weights update"""
-        assert torch.distributed.is_initialized(), "default torch process group must be initialized"
+        assert (
+            torch.distributed.is_initialized()
+        ), "default torch process group must be initialized"
         assert group_name != "", "group name must not be empty"
 
         rank = torch.distributed.get_rank() + rank_offset
@@ -115,7 +127,9 @@ class WorkerWrap(Worker):
         # if torch.distributed.get_rank() == 0:
         #     print(f"update weight: {name}, dtype: {dtype}, shape: {shape}")
 
-        assert dtype == self.model_config.dtype, f"mismatch dtype: src {dtype}, dst {self.model_config.dtype}"
+        assert (
+            dtype == self.model_config.dtype
+        ), f"mismatch dtype: src {dtype}, dst {self.model_config.dtype}"
         weight = torch.empty(shape, dtype=dtype, device="cuda")
         torch.distributed.broadcast(weight, 0, group=self._model_update_group)
 
@@ -139,7 +153,6 @@ class LLMRayActor:
 
         # See https://github.com/vllm-project/vllm/blob/main/vllm/executor/gpu_executor.py
         if self.use_gpu_executor:
-
             vllm.worker.worker.Worker = WorkerWrap
         else:
             # RayGPUExecutor
@@ -172,23 +185,40 @@ class LLMRayActor:
     def generate(self, *args, **kwargs):
         return self.llm.generate(*args, **kwargs)
 
-    def init_process_group(self, master_address, master_port, rank_offset, world_size, group_name, backend):
+    def init_process_group(
+        self, master_address, master_port, rank_offset, world_size, group_name, backend
+    ):
         if self.use_gpu_executor:
             return self.llm.llm_engine.model_executor.driver_worker.init_process_group(
-                master_address, master_port, rank_offset, world_size, group_name, backend
+                master_address,
+                master_port,
+                rank_offset,
+                world_size,
+                group_name,
+                backend,
             )
         else:
             return self.llm.llm_engine.model_executor._run_workers(
-                "init_process_group", master_address, master_port, rank_offset, world_size, group_name, backend
+                "init_process_group",
+                master_address,
+                master_port,
+                rank_offset,
+                world_size,
+                group_name,
+                backend,
             )
 
     def update_weight(self, name, dtype, shape, empty_cache=False):
         self.stop_remote_worker_execution_loop()
 
         if self.use_gpu_executor:
-            return self.llm.llm_engine.model_executor.driver_worker.update_weight(name, dtype, shape, empty_cache)
+            return self.llm.llm_engine.model_executor.driver_worker.update_weight(
+                name, dtype, shape, empty_cache
+            )
         else:
-            return self.llm.llm_engine.model_executor._run_workers("update_weight", name, dtype, shape, empty_cache)
+            return self.llm.llm_engine.model_executor._run_workers(
+                "update_weight", name, dtype, shape, empty_cache
+            )
 
     def stop_remote_worker_execution_loop(self):
         # Fix error for using 2 communication group
@@ -225,7 +255,9 @@ def create_vllm_engines(
             ray.get(pg.ready())
 
             scheduling_strategy = PlacementGroupSchedulingStrategy(
-                placement_group=pg, placement_group_capture_child_tasks=True, placement_group_bundle_index=0
+                placement_group=pg,
+                placement_group_capture_child_tasks=True,
+                placement_group_bundle_index=0,
             )
         print(f"vllm: {num_gpus=}, {num_engines=}")
         vllm_engines.append(

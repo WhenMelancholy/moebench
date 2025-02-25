@@ -12,30 +12,49 @@ python persona_driven_generate_math_code.py --org_name anthropic --model 'claude
 
 import argparse
 import json
-# from openai import OpenAI
-from prompt_templates import instruction_template, knowledge_template, npc_template, math_template, math_solution_template, math_template_easy, grade_math_solution_template, code_template, code_solution_template, math_int_algebra_template
-from datasets import load_dataset
-from tqdm import tqdm
 import random
 import string
-import openai
-from datasets import Dataset
-import anthropic
 
-from tenacity import (
+import anthropic
+import openai
+from datasets import Dataset, load_dataset
+
+# from openai import OpenAI
+from prompt_templates import (
+    code_solution_template,
+    code_template,
+    grade_math_solution_template,
+    instruction_template,
+    knowledge_template,
+    math_int_algebra_template,
+    math_solution_template,
+    math_template,
+    math_template_easy,
+    npc_template,
+)
+from tenacity import (  # for exponential backoff
     retry,
     stop_after_attempt,
     wait_random_exponential,
-)  # for exponential backoff
+)
+from tqdm import tqdm
+
 
 @retry(wait=wait_random_exponential(min=1, max=60), stop=stop_after_attempt(6))
 def completion_with_backoff(**kwargs):
     return openai.ChatCompletion.create(**kwargs)
 
 
-system_prompt = '''You are a helpful mathematician assistant.'''
+system_prompt = """You are a helpful mathematician assistant."""
 # client = OpenAI()   # set up your config/env/api for calling openai models
-MODEL_COSTS = {"gpt-4": [0.00003, 0.00006], "gpt-3.5-turbo": [0.0000015, 0.000002], "gpt-4-1106-preview": [0.00001, 0.00003], 'gpt-4o': [0.000005, 0.000015], 'claude-sonnet':[0.000003, 0.000015], 'claude-3-5-sonnet-20240620': [0.000003, 0.000015]}
+MODEL_COSTS = {
+    "gpt-4": [0.00003, 0.00006],
+    "gpt-3.5-turbo": [0.0000015, 0.000002],
+    "gpt-4-1106-preview": [0.00001, 0.00003],
+    "gpt-4o": [0.000005, 0.000015],
+    "claude-sonnet": [0.000003, 0.000015],
+    "claude-3-5-sonnet-20240620": [0.000003, 0.000015],
+}
 
 
 def get_response(args, user_prompt, org_name="openai"):
@@ -46,14 +65,14 @@ def get_response(args, user_prompt, org_name="openai"):
             max_tokens=1024,
             temperature=0.7,
             messages=[
-                {"role": "system", "content":  f"{system_prompt}"},
-                {"role": "user", "content": f"{user_prompt}"}
-            ]
+                {"role": "system", "content": f"{system_prompt}"},
+                {"role": "user", "content": f"{user_prompt}"},
+            ],
         )
         total_input_tokens = completion.usage.prompt_tokens
         total_output_tokens = completion.usage.completion_tokens
 
-    elif args.org_name == 'anthropic':
+    elif args.org_name == "anthropic":
         client = anthropic.Anthropic(
             api_key=args.api_key,
         )
@@ -62,15 +81,24 @@ def get_response(args, user_prompt, org_name="openai"):
             max_tokens=1024,
             temperature=0.7,
             system=system_prompt,
-            messages=[
-                {"role": "user", "content": user_prompt}
-            ]
+            messages=[{"role": "user", "content": user_prompt}],
         )
         total_input_tokens += response.usage.input_tokens
         total_output_tokens += response.usage.output_tokens
-    return completion.choices[0].message.content, total_input_tokens, total_output_tokens
+    return (
+        completion.choices[0].message.content,
+        total_input_tokens,
+        total_output_tokens,
+    )
 
-process = lambda x: x.replace("Math problem:", "").replace("Question: ", "").lstrip("\n").strip()
+
+process = (
+    lambda x: x.replace("Math problem:", "")
+    .replace("Question: ", "")
+    .lstrip("\n")
+    .strip()
+)
+
 
 def main(args):
     # Load the appropriate template
@@ -99,73 +127,130 @@ def main(args):
     elif args.template == "instruction_following_solution":
         template = instruction_following_solution
     elif args.template == "rewrite_if_prompt":
-        template = rewrite_if_prompt       
+        template = rewrite_if_prompt
     else:
-        raise ValueError("Invalid template type. Choose from 'instruction', 'knowledge', 'npc', or 'math'.")
-    
+        raise ValueError(
+            "Invalid template type. Choose from 'instruction', 'knowledge', 'npc', or 'math'."
+        )
 
     total_input_tokens, total_output_tokens = 0, 0
     in_cost_per_token, out_cost_per_token = MODEL_COSTS[args.model]
 
     # Load the dataset
     if args.dataset.endswith(".jsonl"):
-        persona_dataset = load_dataset("json", data_files=args.dataset)['train']
+        persona_dataset = load_dataset("json", data_files=args.dataset)["train"]
     else:
-        persona_dataset = load_dataset(args.dataset)['train']
+        persona_dataset = load_dataset(args.dataset)["train"]
 
     if args.sanity_check > 0:
         persona_dataset = persona_dataset.select(range(0, args.sanity_check))
     print(f"Total number of input personas: {len(persona_dataset)}")
 
-    input_field = 'synthesized text' if args.template in ["math_solution", "rewrite_if_prompt", "grade_math_solution", "code_solution"] else 'persona'
+    input_field = (
+        "synthesized text"
+        if args.template
+        in [
+            "math_solution",
+            "rewrite_if_prompt",
+            "grade_math_solution",
+            "code_solution",
+        ]
+        else "persona"
+    )
     with open(args.output_path, "w") as out:
-        for idx, example in enumerate(tqdm(persona_dataset.select(range(args.start_index, args.end_index)))):
-            id = "personahub_" + ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(24))
+        for idx, example in enumerate(
+            tqdm(persona_dataset.select(range(args.start_index, args.end_index)))
+        ):
+            id = "personahub_" + "".join(
+                random.choice(string.ascii_lowercase + string.digits) for _ in range(24)
+            )
             input_text = example[input_field].strip()
-            persona = example['input persona'] if args.template in ["math_solution", "grade_math_solution", "code_solution"] else input_text
+            persona = (
+                example["input persona"]
+                if args.template
+                in ["math_solution", "grade_math_solution", "code_solution"]
+                else input_text
+            )
             user_prompt = template.format(persona=input_text)
             gpt4o_out_text, in_tokens, out_tokens = get_response(args, user_prompt)
-            o = {
-                "id": id, 
-                "prompt": input_text, 
-                "input_persona": persona, 
-                "messages": [
-                    {"role": "user", "content": input_text}, 
-                    {"role": "assistant", "content": gpt4o_out_text}
-                    ]
-                } if args.template in ["math_solution", "grade_math_solution", "code_solution"] else {
-                    'input persona': persona,
-                    'synthesized text': process(gpt4o_out_text),
-                    'description': f'{args.template} problem'
+            o = (
+                {
+                    "id": id,
+                    "prompt": input_text,
+                    "input_persona": persona,
+                    "messages": [
+                        {"role": "user", "content": input_text},
+                        {"role": "assistant", "content": gpt4o_out_text},
+                    ],
                 }
-            out.write(json.dumps(o, ensure_ascii=False) + '\n')
+                if args.template
+                in ["math_solution", "grade_math_solution", "code_solution"]
+                else {
+                    "input persona": persona,
+                    "synthesized text": process(gpt4o_out_text),
+                    "description": f"{args.template} problem",
+                }
+            )
+            out.write(json.dumps(o, ensure_ascii=False) + "\n")
 
-            total_input_tokens +=in_tokens
+            total_input_tokens += in_tokens
             total_output_tokens += out_tokens
             if idx % 20 == 0:
-                print(f"estimated cost so far= ${in_cost_per_token * in_tokens + out_cost_per_token * out_tokens}")
+                print(
+                    f"estimated cost so far= ${in_cost_per_token * in_tokens + out_cost_per_token * out_tokens}"
+                )
 
     print(f"Outputted the results to: {args.output_path}")
 
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Synthesize text using a specified model and template.")
+    parser = argparse.ArgumentParser(
+        description="Synthesize text using a specified model and template."
+    )
     parser.add_argument(
-        '--template', 
-        type=str, 
-        required=True, 
-        choices=['math', 'math_solution', 'grade_math', 'grade_math_solution', 'code', 'code_solution', 'math_int_algebra'], 
+        "--template",
+        type=str,
+        required=True,
+        choices=[
+            "math",
+            "math_solution",
+            "grade_math",
+            "grade_math_solution",
+            "code",
+            "code_solution",
+            "math_int_algebra",
+        ],
         help=(
             "Prompt templates. Choose from 'instruction', 'knowledge', 'math' or 'npc'. "
             "You can also add more customized templates in prompt_templates.py"
-        )
+        ),
     )
     parser.add_argument("--dataset", required=False, default="proj-persona/PersonaHub")
-    parser.add_argument("--org_name", default="openai", help="choose either openai for gpt-x or anthropic for claude")
+    parser.add_argument(
+        "--org_name",
+        default="openai",
+        help="choose either openai for gpt-x or anthropic for claude",
+    )
     parser.add_argument("--openai_key", required=True)
     parser.add_argument("--org_id", required=False)
-    parser.add_argument("--model", default="gpt-4o", choices=["gpt-4", "gpt-3.5-turbo", "gpt-4-1106-preview", "gpt-4o", 'claude-sonnet', 'claude-3-5-sonnet-20240620'])
-    parser.add_argument('--output_path', type=str, required=True, help='Path to the output file.')
-    parser.add_argument('--chat_format', type=str, required=False, help='whether to put in chat format')
+    parser.add_argument(
+        "--model",
+        default="gpt-4o",
+        choices=[
+            "gpt-4",
+            "gpt-3.5-turbo",
+            "gpt-4-1106-preview",
+            "gpt-4o",
+            "claude-sonnet",
+            "claude-3-5-sonnet-20240620",
+        ],
+    )
+    parser.add_argument(
+        "--output_path", type=str, required=True, help="Path to the output file."
+    )
+    parser.add_argument(
+        "--chat_format", type=str, required=False, help="whether to put in chat format"
+    )
     parser.add_argument("--start_index", type=int, default=0)
     parser.add_argument("--end_index", type=int, default=None)
     parser.add_argument("--sanity_check", type=int, default=0)

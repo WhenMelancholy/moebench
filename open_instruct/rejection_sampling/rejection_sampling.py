@@ -123,12 +123,16 @@ def process_shard(
 
     # Initialize a data collator to handle dynamic padding of input sequences
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
-    scores = batch_processing_scores(args.max_forward_batch_size, device, tokenizer, ds, model, data_collator)
+    scores = batch_processing_scores(
+        args.max_forward_batch_size, device, tokenizer, ds, model, data_collator
+    )
 
     return scores
 
 
-def process_shard_api(model_name_or_path: str, args: Args, shard: List[str]) -> Tuple[torch.Tensor, torch.Tensor]:
+def process_shard_api(
+    model_name_or_path: str, args: Args, shard: List[str]
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     This function processes a shard (subset) of data using api-based models.
     It feeds data through the model to get reward scores, and handles out-of-memory errors by adjusting the batch size.
@@ -158,10 +162,13 @@ def process_shard_api(model_name_or_path: str, args: Args, shard: List[str]) -> 
     model_responses = ds["model_completion"]
 
     data_list_model_responses = [
-        {"prompt": prompt, "response": response} for prompt, response in zip(prompts, model_responses)
+        {"prompt": prompt, "response": response}
+        for prompt, response in zip(prompts, model_responses)
     ]
     model_responses_scores = asyncio.run(
-        generate_with_openai(model_name_or_path, data_list_model_responses, args, gen_args)
+        generate_with_openai(
+            model_name_or_path, data_list_model_responses, args, gen_args
+        )
     )
 
     return torch.Tensor(model_responses_scores)
@@ -182,7 +189,9 @@ def batch_processing_scores(
     #   e.g., without sort: https://huggingface.co/datasets/vwxyzjn/rejection_sampling_1723242476
     # 2. we shrink the batch size if we run out of memory (so initially we can use a large batch size)
     current_batch_size = max_forward_batch_size
-    input_ids_lengths = [len(x) for x in ds["input_ids"]]  # input_ids_lengths: (num_items_in_shard,)
+    input_ids_lengths = [
+        len(x) for x in ds["input_ids"]
+    ]  # input_ids_lengths: (num_items_in_shard,)
 
     # Get indices that would sort the input lengths
     sorted_indices = np.argsort(input_ids_lengths)
@@ -197,7 +206,9 @@ def batch_processing_scores(
                 input_ids = data_collator(data)["input_ids"].to(device)
                 _, score, _ = get_reward(model, input_ids, tokenizer.pad_token_id, 0)
                 # score = (batch_size, )
-                scores.extend(score.cpu().tolist())  # convert the tensor score to a list
+                scores.extend(
+                    score.cpu().tolist()
+                )  # convert the tensor score to a list
                 i += current_batch_size
             except torch.cuda.OutOfMemoryError:
                 if current_batch_size == 1:
@@ -249,16 +260,24 @@ def main(args: Args):
     for i in range(len(completions)):
         if i % args.num_completions == 0:
             reference_completion = copy.deepcopy(completions[i])
-            reference_completion["messages"][-1]["content"] = reference_completion["reference_completion"]
-            reference_completion["model_completion"] = reference_completion["reference_completion"]
+            reference_completion["messages"][-1]["content"] = reference_completion[
+                "reference_completion"
+            ]
+            reference_completion["model_completion"] = reference_completion[
+                "reference_completion"
+            ]
             new_completions.append(reference_completion)
         new_completions.append(completions[i])
     completions = new_completions
-    actual_num_completions = args.num_completions + 1  # we have added the reference completion
+    actual_num_completions = (
+        args.num_completions + 1
+    )  # we have added the reference completion
 
     # Split the data into shards
     shard_size = len(completions) // args.num_gpus
-    shards = [completions[i : i + shard_size] for i in range(0, len(completions), shard_size)]
+    shards = [
+        completions[i : i + shard_size] for i in range(0, len(completions), shard_size)
+    ]
 
     # Process shards in parallel
     best_offsets_per_model = {}
@@ -275,9 +294,15 @@ def main(args: Args):
             for result in results:
                 scores.append(result)
         else:
-            with mp.Pool(args.num_gpus) as pool:  # NOTE: the `result.get()` need to live in this `mp.Pool` context
+            with mp.Pool(
+                args.num_gpus
+            ) as pool:  # NOTE: the `result.get()` need to live in this `mp.Pool` context
                 for i in range(args.num_gpus):
-                    results.append(pool.apply_async(process_shard, (i, model_name_or_path, args, shards[i])))
+                    results.append(
+                        pool.apply_async(
+                            process_shard, (i, model_name_or_path, args, shards[i])
+                        )
+                    )
                 # Collect results
                 scores = []
                 for result in results:
@@ -285,14 +310,22 @@ def main(args: Args):
 
         # Combine scores from all GPUs
         scores = torch.cat(scores)
-        scores_per_prompt = scores.reshape(-1, actual_num_completions)  # (n_prompts, n_completions)
+        scores_per_prompt = scores.reshape(
+            -1, actual_num_completions
+        )  # (n_prompts, n_completions)
         reference_completion_scores = scores_per_prompt[:, 0]
-        reference_completion_scores_per_model[model_name_or_path] = reference_completion_scores.tolist()
+        reference_completion_scores_per_model[
+            model_name_or_path
+        ] = reference_completion_scores.tolist()
 
         if not args.include_reference_completion_for_rejection_sampling:
             scores_per_prompt = scores_per_prompt[:, 1:]
             scores = scores_per_prompt.flatten()
-            completions = [completions[i] for i in range(len(completions)) if i % actual_num_completions != 0]
+            completions = [
+                completions[i]
+                for i in range(len(completions))
+                if i % actual_num_completions != 0
+            ]
             actual_num_completions -= 1
 
         assert len(completions) == len(scores)
@@ -303,19 +336,29 @@ def main(args: Args):
             completions[i]["score"][model_name_or_path] = scores[i].item()
             if "reference_completion_score" not in completions[i]:
                 completions[i]["reference_completion_score"] = {}
-            completions[i]["reference_completion_score"][model_name_or_path] = reference_completion_scores[
-                i // actual_num_completions
-            ].item()
+            completions[i]["reference_completion_score"][
+                model_name_or_path
+            ] = reference_completion_scores[i // actual_num_completions].item()
 
-        best_indices = torch.argmax(scores_per_prompt, dim=1)  # (n_prompts, 1) --> (n_prompts, )
-        worst_indices = torch.argmin(scores_per_prompt, dim=1)  # (n_prompts, 1) --> (n_prompts, )
+        best_indices = torch.argmax(
+            scores_per_prompt, dim=1
+        )  # (n_prompts, 1) --> (n_prompts, )
+        worst_indices = torch.argmin(
+            scores_per_prompt, dim=1
+        )  # (n_prompts, 1) --> (n_prompts, )
         best_indices_offset = (
-            torch.arange(0, len(best_indices) * actual_num_completions, actual_num_completions) + best_indices
+            torch.arange(
+                0, len(best_indices) * actual_num_completions, actual_num_completions
+            )
+            + best_indices
         )
         best_offsets_per_model[model_name_or_path] = best_indices_offset
 
         worst_indices_offset = (
-            torch.arange(0, len(worst_indices) * actual_num_completions, actual_num_completions) + worst_indices
+            torch.arange(
+                0, len(worst_indices) * actual_num_completions, actual_num_completions
+            )
+            + worst_indices
         )
         worst_offsets_per_model[model_name_or_path] = worst_indices_offset
 
@@ -331,11 +374,19 @@ def main(args: Args):
     for i in range(len(best_completions)):
         table["chosen"].append(best_completions[i]["messages"])
         table["rejected"].append(worst_completions[i]["messages"])
-        table["reference_completion"].append(worst_completions[i]["reference_completion"])
-        table["reference_completion_score"].append(
-            {key: reference_completion_scores_per_model[key][i] for key in reference_completion_scores_per_model}
+        table["reference_completion"].append(
+            worst_completions[i]["reference_completion"]
         )
-        assert worst_completions[i]["messages"][:-1] == best_completions[i]["messages"][:-1]
+        table["reference_completion_score"].append(
+            {
+                key: reference_completion_scores_per_model[key][i]
+                for key in reference_completion_scores_per_model
+            }
+        )
+        assert (
+            worst_completions[i]["messages"][:-1]
+            == best_completions[i]["messages"][:-1]
+        )
         table["chosen_score"].append(best_completions[i]["score"])
         table["rejected_score"].append(worst_completions[i]["score"])
     save_jsonl(args.save_filename, table)

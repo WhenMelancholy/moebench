@@ -1,6 +1,6 @@
-'''
+"""
 Utils from https://github.com/EleutherAI/lm-evaluation-harness/blob/main/lm_eval/tasks/minerva_math/utils.py
-'''
+"""
 import re
 
 SUBSTITUTIONS = [
@@ -60,6 +60,7 @@ REMOVED_EXPRESSIONS = [
     "\\dots",
 ]
 
+
 def normalize_final_answer(final_answer: str) -> str:
     """
     Normalize a final answer to a quantitative reasoning question.
@@ -97,6 +98,7 @@ def normalize_final_answer(final_answer: str) -> str:
 
     return final_answer
 
+
 def get_unnormalized_answer(text: str) -> str:
     INVALID_ANSWER = "[invalidanswer]"
     end_seq = "I hope it is correct."
@@ -109,6 +111,7 @@ def get_unnormalized_answer(text: str) -> str:
         return match.group(1).strip()
     else:
         return INVALID_ANSWER
+
 
 # string normalization from https://github.com/EleutherAI/lm-evaluation-harness/blob/master/lm_eval/tasks/hendrycks_math.py
 def is_equiv(str1, str2, verbose=False):

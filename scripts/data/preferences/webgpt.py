@@ -22,7 +22,9 @@ def extract(item):
         elif isinstance(quotes, dict):
             extracts = quotes.get("extract", [])
             if isinstance(extracts, list):
-                return "\n\n".join(f"{i+1}. {extract}" for i, extract in enumerate(extracts))
+                return "\n\n".join(
+                    f"{i+1}. {extract}" for i, extract in enumerate(extracts)
+                )
             else:
                 return extracts
         elif isinstance(quotes, list):
@@ -35,8 +37,14 @@ def extract(item):
     quotes_1 = format_quotes(item.get("quotes_1", ""))
 
     # Prepare the user messages (questions with quotes)
-    question_0 = {"role": "user", "content": f"{item['question']['full_text']}\n\n{quotes_0}"}
-    question_1 = {"role": "user", "content": f"{item['question']['full_text']}\n\n{quotes_1}"}
+    question_0 = {
+        "role": "user",
+        "content": f"{item['question']['full_text']}\n\n{quotes_0}",
+    }
+    question_1 = {
+        "role": "user",
+        "content": f"{item['question']['full_text']}\n\n{quotes_1}",
+    }
 
     # Prepare the assistant messages (answers)
     answer_0 = {"role": "assistant", "content": item["answer_0"]}
@@ -88,7 +96,13 @@ def main(push_to_hub: bool, hf_entity: str | None):
 
     all_col = ds.column_names
     # remove except prompt and chosen and rejected
-    ds = ds.remove_columns([col for col in all_col if col not in ["prompt", "chosen", "rejected", "margin"]])
+    ds = ds.remove_columns(
+        [
+            col
+            for col in all_col
+            if col not in ["prompt", "chosen", "rejected", "margin"]
+        ]
+    )
 
     print(f"{multiprocessing.cpu_count()=}")
 
@@ -111,8 +125,14 @@ def main(push_to_hub: bool, hf_entity: str | None):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Process WebGPT dataset and optionally upload to Hugging Face Hub.")
-    parser.add_argument("--push_to_hub", action="store_true", help="Upload the dataset to Hugging Face Hub")
+    parser = argparse.ArgumentParser(
+        description="Process WebGPT dataset and optionally upload to Hugging Face Hub."
+    )
+    parser.add_argument(
+        "--push_to_hub",
+        action="store_true",
+        help="Upload the dataset to Hugging Face Hub",
+    )
     parser.add_argument(
         "--hf_entity",
         type=str,

@@ -1,14 +1,20 @@
-import os
 import argparse
+import os
 import random
-import tqdm
 
+import tqdm
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--flan_v2_data_dir", type=str, default="../open-instruct/data/raw_train/flan_v2")
+    parser.add_argument(
+        "--flan_v2_data_dir",
+        type=str,
+        default="../open-instruct/data/raw_train/flan_v2",
+    )
     parser.add_argument("--total_num_samples", type=int, default=50000)
-    parser.add_argument("--output_path", type=str, default="data/raw_train/flan_v2/flan_v2_50k.jsonl")
+    parser.add_argument(
+        "--output_path", type=str, default="data/raw_train/flan_v2/flan_v2_50k.jsonl"
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
         "--mixing_portions",
@@ -69,7 +75,9 @@ if __name__ == "__main__":
             if num_sample == 0:
                 continue
             print(f"Sampling {num_sample} samples from {task_name}")
-            task_data_path = os.path.join(args.flan_v2_data_dir, task_name, f"{task_name}.jsonl")
+            task_data_path = os.path.join(
+                args.flan_v2_data_dir, task_name, f"{task_name}.jsonl"
+            )
             # randomly sample num_sample lines from task_data_path, the data might be very large so we can't load it all into memory
             # we need to first count the total number of lines in the file and then only load the lines we need
             num_lines = 0
@@ -80,6 +88,8 @@ if __name__ == "__main__":
             sampled_lines = random.sample(range(num_lines), num_sample)
             sampled_lines = set(sampled_lines)
             with open(task_data_path, "r") as fin:
-                for i, line in tqdm.tqdm(enumerate(fin), desc=f"Reading the file to save the sampled lines"):
+                for i, line in tqdm.tqdm(
+                    enumerate(fin), desc=f"Reading the file to save the sampled lines"
+                ):
                     if i in sampled_lines:
                         fout.write(line)

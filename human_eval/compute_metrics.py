@@ -1,6 +1,7 @@
-import pandas as pd
 import json
 from collections import Counter
+
+import pandas as pd
 
 
 def get_acceptance_results(records, target_model_a, target_model_b):
@@ -12,16 +13,26 @@ def get_acceptance_results(records, target_model_a, target_model_b):
         instance_id = record.instance_id
         if instance_id not in acceptance_results[record.model_a]:
             acceptance_results[record.model_a][instance_id] = []
-        acceptance_results[record.model_a][instance_id].append(record.completion_a_is_acceptable)
-        
+        acceptance_results[record.model_a][instance_id].append(
+            record.completion_a_is_acceptable
+        )
+
         if instance_id not in acceptance_results[record.model_b]:
             acceptance_results[record.model_b][instance_id] = []
-        acceptance_results[record.model_b][instance_id].append(record.completion_b_is_acceptable)
+        acceptance_results[record.model_b][instance_id].append(
+            record.completion_b_is_acceptable
+        )
 
     # count how many instances get multiple annotations
-    instances_with_multiple_annotations = [instance_id for instance_id, results in acceptance_results[record.model_a].items() if len(results) > 1]
+    instances_with_multiple_annotations = [
+        instance_id
+        for instance_id, results in acceptance_results[record.model_a].items()
+        if len(results) > 1
+    ]
     agreement_results = {
-        "num_instances_with_multiple_annotations": len(instances_with_multiple_annotations),
+        "num_instances_with_multiple_annotations": len(
+            instances_with_multiple_annotations
+        ),
         "acceptance_agreement": None,
     }
     assert target_model_a in acceptance_results
@@ -35,16 +46,33 @@ def get_acceptance_results(records, target_model_a, target_model_b):
                 agreed_model_a_acceptance += 1
             if len(set(acceptance_results[target_model_b][instance_id][:2])) == 1:
                 agreed_model_b_acceptance += 1
-        agreement_results["acceptance_agreement"] = \
-            (agreed_model_a_acceptance + agreed_model_b_acceptance) / (2 * len(instances_with_multiple_annotations))
-        agreement_results[f"{target_model_a}_acceptance_agreement"] = agreed_model_a_acceptance / len(instances_with_multiple_annotations)
-        agreement_results[f"{target_model_b}_acceptance_agreement"] = agreed_model_b_acceptance / len(instances_with_multiple_annotations)
+        agreement_results["acceptance_agreement"] = (
+            agreed_model_a_acceptance + agreed_model_b_acceptance
+        ) / (2 * len(instances_with_multiple_annotations))
+        agreement_results[
+            f"{target_model_a}_acceptance_agreement"
+        ] = agreed_model_a_acceptance / len(instances_with_multiple_annotations)
+        agreement_results[
+            f"{target_model_b}_acceptance_agreement"
+        ] = agreed_model_b_acceptance / len(instances_with_multiple_annotations)
 
     # print("Num of results for {}: {}".format(target_model_a, len(acceptance_results[target_model_a])))
     # print("Num of results for {}: {}".format(target_model_b, len(acceptance_results[target_model_b])))
     return {
-        f"{target_model_a}": sum([1 if x[0]=="yes" else 0 for _, x in acceptance_results[target_model_a].items()]) / len(acceptance_results[target_model_a]),
-        f"{target_model_b}": sum([1 if x[0]=="yes" else 0 for _, x in acceptance_results[target_model_b].items()]) / len(acceptance_results[target_model_b]),
+        f"{target_model_a}": sum(
+            [
+                1 if x[0] == "yes" else 0
+                for _, x in acceptance_results[target_model_a].items()
+            ]
+        )
+        / len(acceptance_results[target_model_a]),
+        f"{target_model_b}": sum(
+            [
+                1 if x[0] == "yes" else 0
+                for _, x in acceptance_results[target_model_b].items()
+            ]
+        )
+        / len(acceptance_results[target_model_b]),
         "agreement": agreement_results,
     }
 
@@ -74,21 +102,32 @@ def get_comparison_results(records, target_model_a, target_model_b):
             print(record)
 
     # thre can be multiple annotations for each instance; use the first comparison result for each instance
-    earlies_comparison_results = [results[0] for _, results in comparison_results.items()]
+    earlies_comparison_results = [
+        results[0] for _, results in comparison_results.items()
+    ]
     model_wins_counter = Counter(earlies_comparison_results)
     model_wins_rates = {
-        result: count / len(earlies_comparison_results) for result, count in model_wins_counter.items()
+        result: count / len(earlies_comparison_results)
+        for result, count in model_wins_counter.items()
     }
     # merge the clearly better and slightly better results
-    model_wins_rates[f"{target_model_a}_wins"] = \
-        sum([v for k, v in model_wins_rates.items() if target_model_a in k])
-    model_wins_rates[f"{target_model_b}_wins"] = \
-        sum([v for k, v in model_wins_rates.items() if target_model_b in k])
-    
+    model_wins_rates[f"{target_model_a}_wins"] = sum(
+        [v for k, v in model_wins_rates.items() if target_model_a in k]
+    )
+    model_wins_rates[f"{target_model_b}_wins"] = sum(
+        [v for k, v in model_wins_rates.items() if target_model_b in k]
+    )
+
     # count how many instances get multiple annotations
-    instances_with_multiple_annotations = [instance_id for instance_id, results in comparison_results.items() if len(results) > 1]
+    instances_with_multiple_annotations = [
+        instance_id
+        for instance_id, results in comparison_results.items()
+        if len(results) > 1
+    ]
     agreement_results = {
-        "num_instances_with_multiple_annotations": len(instances_with_multiple_annotations),
+        "num_instances_with_multiple_annotations": len(
+            instances_with_multiple_annotations
+        ),
         "comparison_agreement": None,
         "relexed_comparison_agreement": None,
     }
@@ -113,11 +152,16 @@ def get_comparison_results(records, target_model_a, target_model_b):
             else:
                 if "tie" in simplified_comparisons[:2]:
                     relexed_agreed_comparison += 0.5
-        agreement_results["comparison_agreement"] = agreed_comparison / len(instances_with_multiple_annotations) 
-        agreement_results["relexed_comparison_agreement"] = relexed_agreed_comparison / len(instances_with_multiple_annotations)   
-    
+        agreement_results["comparison_agreement"] = agreed_comparison / len(
+            instances_with_multiple_annotations
+        )
+        agreement_results[
+            "relexed_comparison_agreement"
+        ] = relexed_agreed_comparison / len(instances_with_multiple_annotations)
+
     model_wins_rates["agreement"] = agreement_results
     return model_wins_rates
+
 
 if __name__ == "__main__":
     annotations = pd.read_excel("data/eval_annotations.xlsx", header=0)
@@ -150,7 +194,11 @@ if __name__ == "__main__":
                 evaluators.add(record["evaluator"])
                 new_records.append(record)
             else:
-                print("duplicate record for instance {} by evaluator {}".format(instance_index, record["evaluator"]))
+                print(
+                    "duplicate record for instance {} by evaluator {}".format(
+                        instance_index, record["evaluator"]
+                    )
+                )
         instance_records[instance_index] = new_records
     deduplicated_records = []
     for instance_index, records in instance_records.items():
@@ -178,14 +226,25 @@ if __name__ == "__main__":
             instance_id = record.instance_id
 
             # skip if the record is not for the target model pair
-            if set([target_model_a, target_model_b]) != set([record.model_a, record.model_b]):
-                assert any([set([record.model_a, record.model_b]) == set(pair) for pair in model_pairs])
+            if set([target_model_a, target_model_b]) != set(
+                [record.model_a, record.model_b]
+            ):
+                assert any(
+                    [
+                        set([record.model_a, record.model_b]) == set(pair)
+                        for pair in model_pairs
+                    ]
+                )
                 continue
-            
+
             comparison_records.append(record)
 
-        acceptance_results = get_acceptance_results(comparison_records, target_model_a, target_model_b)
-        comparison_results = get_comparison_results(comparison_records, target_model_a, target_model_b)
+        acceptance_results = get_acceptance_results(
+            comparison_records, target_model_a, target_model_b
+        )
+        comparison_results = get_comparison_results(
+            comparison_records, target_model_a, target_model_b
+        )
         results[f"{target_model_a}_vs_{target_model_b}"] = {
             "acceptance_results": acceptance_results,
             "comparison_results": comparison_results,

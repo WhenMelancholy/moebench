@@ -35,11 +35,14 @@ def load_nectar_dataset(subset="lmsys-chat-1m", deduplication=False):
 
         # Filter Nectar dataset, excluding lmsys-chat-1m and anthropic-hh
         filtered_dataset = nectar_dataset.filter(
-            lambda example: example["source"][0] not in ["lmsys-chat-1m", "anthropic-hh"]
+            lambda example: example["source"][0]
+            not in ["lmsys-chat-1m", "anthropic-hh"]
         )
     else:
         # Filter the dataset based on the subset
-        filtered_dataset = nectar_dataset.filter(lambda example: example["source"] == [subset])
+        filtered_dataset = nectar_dataset.filter(
+            lambda example: example["source"] == [subset]
+        )
 
     print(f"Filtered dataset size: {len(filtered_dataset)}")
 
@@ -69,7 +72,10 @@ def load_nectar_dataset(subset="lmsys-chat-1m", deduplication=False):
 
             binarized_example = {
                 "prompt": prompt,
-                "chosen": [{"role": "user", "content": prompt}, {"role": "assistant", "content": chosen["answer"]}],
+                "chosen": [
+                    {"role": "user", "content": prompt},
+                    {"role": "assistant", "content": chosen["answer"]},
+                ],
                 "rejected": [
                     {"role": "user", "content": prompt},
                     {"role": "assistant", "content": rejected["answer"]},
@@ -88,18 +94,41 @@ def load_nectar_dataset(subset="lmsys-chat-1m", deduplication=False):
 
 def main():
     parser = argparse.ArgumentParser(description="Load and process the Nectar dataset")
-    parser.add_argument("--dataset_name", type=str, default="nectar_binarized", help="Name for the processed dataset")
-    parser.add_argument("--push_to_hub", action="store_true", help="Push the dataset to Hugging Face Hub")
-    parser.add_argument("--hf_entity", type=str, default=None, help="Hugging Face username or organization")
     parser.add_argument(
-        "--deduplication", action="store_true", help="Apply deduplication to the dataset from UltraFeedback"
+        "--dataset_name",
+        type=str,
+        default="nectar_binarized",
+        help="Name for the processed dataset",
     )
-    parser.add_argument("--subset", type=str, default="lmsys-chat-1m", help="Subset of the dataset to use")
+    parser.add_argument(
+        "--push_to_hub",
+        action="store_true",
+        help="Push the dataset to Hugging Face Hub",
+    )
+    parser.add_argument(
+        "--hf_entity",
+        type=str,
+        default=None,
+        help="Hugging Face username or organization",
+    )
+    parser.add_argument(
+        "--deduplication",
+        action="store_true",
+        help="Apply deduplication to the dataset from UltraFeedback",
+    )
+    parser.add_argument(
+        "--subset",
+        type=str,
+        default="lmsys-chat-1m",
+        help="Subset of the dataset to use",
+    )
 
     args = parser.parse_args()
 
     # Load and process the dataset
-    binarized_data = load_nectar_dataset(subset=args.subset, deduplication=args.deduplication)
+    binarized_data = load_nectar_dataset(
+        subset=args.subset, deduplication=args.deduplication
+    )
 
     # Convert to Hugging Face Dataset
     binarized_ds = Dataset.from_list(binarized_data)

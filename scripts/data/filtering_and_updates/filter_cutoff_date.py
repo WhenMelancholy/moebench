@@ -1,8 +1,8 @@
-import re
 import argparse
-from datasets import load_dataset
-from typing import List, Dict
-from datasets import Features, Value, Sequence
+import re
+from typing import Dict, List
+
+from datasets import Features, Sequence, Value, load_dataset
 
 """
 Motivated by: realizing the SFT mix has lots of "as my last update in April 2023" snippets. for next version, we should really template these, so we can add exact cutoff date.
@@ -35,13 +35,14 @@ CUT_OFF_PATTERN = re.compile(
     """
 )
 
+
 def process_example(example: Dict, column: str) -> Dict:
     """
     Extract cutoff date mentions from the specified column and add them to the example.
     """
     messages = example.get(column, [])
     matches = []
-    
+
     id = example.get("id", "")
     source = example.get("source", "")
 
@@ -50,12 +51,13 @@ def process_example(example: Dict, column: str) -> Dict:
         if isinstance(content, str):
             found_matches = list(CUT_OFF_PATTERN.finditer(content))
             matches.extend(str(match.group(0)) for match in found_matches)
-    
+
     new_features = {k: v for k, v in example.items()}
     new_features["cutoff_matches"] = matches
     new_features["id"] = id
     new_features["source"] = source
     return new_features
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -67,36 +69,36 @@ def main():
     args = parser.parse_args()
 
     dataset = load_dataset(args.dataset)
-    
+
     split_name = args.split
     split_data = dataset[split_name]
     print(f"\nProcessing split: {split_name}")
     print(f"Number of examples in split: {len(split_data)}")
-    
+
     # Add new features including cutoff_matches
     new_features = split_data.features.copy()
     new_features["cutoff_matches"] = Sequence(Value("string"))
     new_features["id"] = Value("string")
     new_features["source"] = Value("string")
-    
+
     # Process examples with the new features
     processed = split_data.map(
         lambda ex: process_example(ex, column=args.column),
         num_proc=args.num_proc,
         desc="Extracting cutoff matches",
-        features=new_features
+        features=new_features,
     )
-    
+
     # Filter examples with matches
     filtered = processed.filter(
         lambda ex: bool(ex["cutoff_matches"]),
         num_proc=args.num_proc,
-        desc="Filtering examples with cutoff mentions"
+        desc="Filtering examples with cutoff mentions",
     )
-    
+
     # Collect all matches
     all_matches = [match for ex in filtered for match in ex["cutoff_matches"]]
-    
+
     # print ids and counter of sources
     sources = {}
     for ex in filtered:
@@ -121,7 +123,7 @@ def main():
     processed = processed.filter(
         lambda ex: ex["id"] not in remove_ids,
         num_proc=args.num_proc,
-        desc="Filtering processed examples"
+        desc="Filtering processed examples",
     )
     print(f"Number of examples in processed after filtering: {len(processed)}")
     print(f"Number of examples in orig dataset: {len(split_data)}")
@@ -133,7 +135,6 @@ def main():
         processed = processed.remove_columns(["cutoff_matches"])
         processed.push_to_hub(new_name)
 
-                
 
 if __name__ == "__main__":
     main()

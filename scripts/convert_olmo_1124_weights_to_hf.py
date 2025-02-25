@@ -22,11 +22,8 @@ from typing import Any, Dict
 import torch
 import yaml
 from tokenizers import Tokenizer
-
-from transformers import Olmo1124Config
-from transformers import Olmo1124ForCausalLM
+from transformers import Olmo1124Config, Olmo1124ForCausalLM
 from transformers.models.gpt2.tokenization_gpt2_fast import GPT2TokenizerFast
-
 
 """
 Sample usage:
@@ -43,7 +40,9 @@ huggingface-cli upload --revision "${exp_name}_hf" allenai/open_instruct_dev "mo
 
 
 def compute_intermediate_size(n, ffn_dim_multiplier=1, multiple_of=256):
-    return multiple_of * ((int(ffn_dim_multiplier * int(8 * n / 3)) + multiple_of - 1) // multiple_of)
+    return multiple_of * (
+        (int(ffn_dim_multiplier * int(8 * n / 3)) + multiple_of - 1) // multiple_of
+    )
 
 
 def read_json(path):
@@ -73,7 +72,9 @@ def write_model(
     olmo_1124_config = yaml.safe_load(config_path.read_text())["model"]
 
     if not olmo_1124_config.get("attention_layer_norm", False):
-        raise RuntimeError("OLMo November 2024 checkpoints must have attention layer norm")
+        raise RuntimeError(
+            "OLMo November 2024 checkpoints must have attention layer norm"
+        )
     if not olmo_1124_config.get("norm_after", False):
         raise RuntimeError("OLMo November 2024 checkpoints must set norm_after to True")
 
@@ -82,14 +83,18 @@ def write_model(
     dim = olmo_1124_config["d_model"]
     dims_per_head = dim // n_heads
     base = olmo_1124_config["rope_theta"]
-    inv_freq = 1.0 / (base ** (torch.arange(0, dims_per_head, 2).float() / dims_per_head))
+    inv_freq = 1.0 / (
+        base ** (torch.arange(0, dims_per_head, 2).float() / dims_per_head)
+    )
     max_position_embeddings = olmo_1124_config["max_sequence_length"]
 
     vocab_size = olmo_1124_config.get("embedding_size", olmo_1124_config["vocab_size"])
 
     if olmo_1124_config.get("n_kv_heads", None) is not None:
         num_key_value_heads = olmo_1124_config["n_kv_heads"]  # for GQA / MQA
-    elif olmo_1124_config["multi_query_attention"]:  # compatibility with other checkpoints
+    elif olmo_1124_config[
+        "multi_query_attention"
+    ]:  # compatibility with other checkpoints
         num_key_value_heads = 1
     else:
         num_key_value_heads = n_heads
@@ -107,7 +112,11 @@ def write_model(
         # Unsharded
         # TODO: Layernorm stuff
         # TODO: multi query attention
-        fused_dims = [dim, dims_per_head * num_key_value_heads, dims_per_head * num_key_value_heads]
+        fused_dims = [
+            dim,
+            dims_per_head * num_key_value_heads,
+            dims_per_head * num_key_value_heads,
+        ]
         q_proj_weight, k_proj_weight, v_proj_weight = torch.split(
             loaded[f"transformer.blocks.{layer_i}.att_proj.weight"], fused_dims, dim=0
         )
@@ -118,11 +127,19 @@ def write_model(
             f"model.layers.{layer_i}.self_attn.q_proj.weight": q_proj_weight,
             f"model.layers.{layer_i}.self_attn.k_proj.weight": k_proj_weight,
             f"model.layers.{layer_i}.self_attn.v_proj.weight": v_proj_weight,
-            f"model.layers.{layer_i}.self_attn.o_proj.weight": loaded[f"transformer.blocks.{layer_i}.attn_out.weight"],
-            f"model.layers.{layer_i}.self_attn.q_norm.weight": loaded[f"transformer.blocks.{layer_i}.q_norm.weight"],
-            f"model.layers.{layer_i}.self_attn.k_norm.weight": loaded[f"transformer.blocks.{layer_i}.k_norm.weight"],
+            f"model.layers.{layer_i}.self_attn.o_proj.weight": loaded[
+                f"transformer.blocks.{layer_i}.attn_out.weight"
+            ],
+            f"model.layers.{layer_i}.self_attn.q_norm.weight": loaded[
+                f"transformer.blocks.{layer_i}.q_norm.weight"
+            ],
+            f"model.layers.{layer_i}.self_attn.k_norm.weight": loaded[
+                f"transformer.blocks.{layer_i}.k_norm.weight"
+            ],
             f"model.layers.{layer_i}.mlp.gate_proj.weight": gate_proj_weight,
-            f"model.layers.{layer_i}.mlp.down_proj.weight": loaded[f"transformer.blocks.{layer_i}.ff_out.weight"],
+            f"model.layers.{layer_i}.mlp.down_proj.weight": loaded[
+                f"transformer.blocks.{layer_i}.ff_out.weight"
+            ],
             f"model.layers.{layer_i}.mlp.up_proj.weight": up_proj_weight,
             f"model.layers.{layer_i}.post_attention_layernorm.weight": loaded[
                 f"transformer.blocks.{layer_i}.attn_norm.weight"
@@ -196,7 +213,9 @@ def write_model(
         _write_tokenizer(model_path, config, input_base_path, tokenizer_path)
 
     print("Loading the checkpoint in a OLMo November 2024 model.")
-    model = Olmo1124ForCausalLM.from_pretrained(tmp_model_path, torch_dtype=torch.float32, low_cpu_mem_usage=True)
+    model = Olmo1124ForCausalLM.from_pretrained(
+        tmp_model_path, torch_dtype=torch.float32, low_cpu_mem_usage=True
+    )
     # Avoid saving this as part of the config.
     del model.config._name_or_path
     print("Saving in the Transformers format.")
@@ -227,8 +246,14 @@ def _write_tokenizer(
         else:
             base_tokenizer = Tokenizer.from_pretrained(tokenizer_config["identifier"])
 
-    eos_token_id = config.eos_token_id if config.eos_token_id is not None else base_tokenizer.get_vocab_size() - 1
-    pad_token_id = config.pad_token_id if config.pad_token_id is not None else eos_token_id
+    eos_token_id = (
+        config.eos_token_id
+        if config.eos_token_id is not None
+        else base_tokenizer.get_vocab_size() - 1
+    )
+    pad_token_id = (
+        config.pad_token_id if config.pad_token_id is not None else eos_token_id
+    )
 
     tokenizer = GPT2TokenizerFast(
         tokenizer_object=base_tokenizer,
@@ -275,7 +300,11 @@ def main():
         dest="tmp_cleanup",
         help="If passed, don't remove temp dir at end of HF conversion.",
     )
-    parser.add_argument("--safe_serialization", type=bool, help="Whether or not to save using `safetensors`.")
+    parser.add_argument(
+        "--safe_serialization",
+        type=bool,
+        help="Whether or not to save using `safetensors`.",
+    )
     # Different OLMo November 2024 versions used different default values for max_position_embeddings, hence the need to be able to specify which version is being used.
     args = parser.parse_args()
     write_model(

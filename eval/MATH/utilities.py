@@ -19,14 +19,15 @@ def last_boxed_only_string(string: str):
     if right_brace_idx == None:
         retval = ""
     else:
-        retval = string[idx:right_brace_idx + 1]
+        retval = string[idx : right_brace_idx + 1]
     return retval
+
 
 def remove_boxed(s: str):
     left = "\\boxed{"
     try:
-        assert s[:len(left)] == left
+        assert s[: len(left)] == left
         assert s[-1] == "}"
-        return s[len(left):-1]
+        return s[len(left) : -1]
     except:
         return ""

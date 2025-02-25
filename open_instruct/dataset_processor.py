@@ -221,21 +221,34 @@ class DatasetConfig:
             self.load_from_cache_file = False
         else:
             # beaker specific logic; we may get assigned 15.5 CPU, so we convert it to float then int
-            self.num_proc = int(float(os.environ.get("BEAKER_ASSIGNED_CPU_COUNT", multiprocessing.cpu_count())))
+            self.num_proc = int(
+                float(
+                    os.environ.get(
+                        "BEAKER_ASSIGNED_CPU_COUNT", multiprocessing.cpu_count()
+                    )
+                )
+            )
             self.load_from_cache_file = True
 
         if self.chat_template is not None and self.chat_template not in CHAT_TEMPLATES:
-            raise ValueError(f"chat_template must None or one of {list(CHAT_TEMPLATES.keys())}")
+            raise ValueError(
+                f"chat_template must None or one of {list(CHAT_TEMPLATES.keys())}"
+            )
 
 
-def get_num_proc(dataset_len: int, num_available_cpus: int, example_per_second_per_cpu) -> int:
+def get_num_proc(
+    dataset_len: int, num_available_cpus: int, example_per_second_per_cpu
+) -> int:
     num_required_cpus = max(1, dataset_len // example_per_second_per_cpu)
     return min(num_required_cpus, num_available_cpus)
 
 
 def select_nested(dataset: DatasetDict, max_examples_per_split: int):
     """select the dataset nested in a DatasetDict"""
-    return {key: dataset[key].select(range(min(max_examples_per_split, len(dataset[key])))) for key in dataset}
+    return {
+        key: dataset[key].select(range(min(max_examples_per_split, len(dataset[key]))))
+        for key in dataset
+    }
 
 
 class DatasetProcessor:
@@ -256,7 +269,9 @@ class DatasetProcessor:
             return dataset
         raise NotImplementedError
 
-    def get_token_length_stats(self, features: list[str], dataset: Union[Dataset, DatasetDict]):
+    def get_token_length_stats(
+        self, features: list[str], dataset: Union[Dataset, DatasetDict]
+    ):
         """Get token length statistics for the dataset"""
         if isinstance(dataset, Dataset):
             return self._get_token_length_stats(features, dataset)
@@ -272,7 +287,8 @@ class DatasetProcessor:
             stats[key] = {
                 "max_token_length": max(len(x) for x in dataset[key]),
                 "min_token_length": min(len(x) for x in dataset[key]),
-                "mean_token_length": sum(len(x) for x in dataset[key]) / len(dataset[key]),
+                "mean_token_length": sum(len(x) for x in dataset[key])
+                / len(dataset[key]),
             }
         return stats
 
@@ -325,15 +341,23 @@ class PreferenceDatasetProcessor(DatasetProcessor):
                 add_generation_prompt=True,
             )
             row[ATTENTION_MASK_PROMPT_KEY] = [1] * len(row[INPUT_IDS_PROMPT_KEY])
-            row[INPUT_IDS_CHOSEN_KEY] = self.tokenizer.apply_chat_template(row[self.config.preference_chosen_key])
+            row[INPUT_IDS_CHOSEN_KEY] = self.tokenizer.apply_chat_template(
+                row[self.config.preference_chosen_key]
+            )
             row[ATTENTION_MASK_CHOSEN_KEY] = [1] * len(row[INPUT_IDS_CHOSEN_KEY])
-            row[INPUT_IDS_REJECTED_KEY] = self.tokenizer.apply_chat_template(row[self.config.preference_rejected_key])
+            row[INPUT_IDS_REJECTED_KEY] = self.tokenizer.apply_chat_template(
+                row[self.config.preference_rejected_key]
+            )
             row[ATTENTION_MASK_REJECTED_KEY] = [1] * len(row[INPUT_IDS_REJECTED_KEY])
             return row
 
         return dataset.map(
             tokenize_fn,
-            num_proc=get_num_proc(len(dataset), self.config.num_proc, APPLY_CHAT_TEMPLATE_EXAMPLE_PER_SECOND_PER_CPU),
+            num_proc=get_num_proc(
+                len(dataset),
+                self.config.num_proc,
+                APPLY_CHAT_TEMPLATE_EXAMPLE_PER_SECOND_PER_CPU,
+            ),
             load_from_cache_file=self.config.load_from_cache_file,
         )
 
@@ -343,10 +367,13 @@ class PreferenceDatasetProcessor(DatasetProcessor):
                 len(row[INPUT_IDS_PROMPT_KEY]) <= self.config.max_prompt_token_length
                 if self.config.max_prompt_token_length is not None
                 else (
-                    True and len(row[INPUT_IDS_CHOSEN_KEY]) <= self.config.max_token_length
+                    True
+                    and len(row[INPUT_IDS_CHOSEN_KEY]) <= self.config.max_token_length
                     if self.config.max_token_length is not None
                     else (
-                        True and len(row[INPUT_IDS_REJECTED_KEY]) <= self.config.max_token_length
+                        True
+                        and len(row[INPUT_IDS_REJECTED_KEY])
+                        <= self.config.max_token_length
                         if self.config.max_token_length is not None
                         else True
                     )
@@ -355,15 +382,21 @@ class PreferenceDatasetProcessor(DatasetProcessor):
 
         filtered_dataset = dataset.filter(
             filter_fn,
-            num_proc=get_num_proc(len(dataset), self.config.num_proc, FILTER_EXAMPLE_PER_SECOND_PER_CPU),
+            num_proc=get_num_proc(
+                len(dataset), self.config.num_proc, FILTER_EXAMPLE_PER_SECOND_PER_CPU
+            ),
             load_from_cache_file=self.config.load_from_cache_file,
         )
         if isinstance(dataset, DatasetDict):
             for key in dataset:
                 filtered_count = len(dataset[key]) - len(filtered_dataset[key])
                 total_count = len(dataset[key])
-                percentage = (filtered_count / total_count) * 100 if total_count > 0 else 0
-                logging.info(f"Filtered out {filtered_count} samples or {percentage:.2f}% samples from {key}")
+                percentage = (
+                    (filtered_count / total_count) * 100 if total_count > 0 else 0
+                )
+                logging.info(
+                    f"Filtered out {filtered_count} samples or {percentage:.2f}% samples from {key}"
+                )
         return filtered_dataset
 
     def get_token_length_stats(self, dataset: Union[Dataset, DatasetDict]):
@@ -376,7 +409,9 @@ class PreferenceDatasetProcessor(DatasetProcessor):
             dataset=dataset,
         )
 
-    def get_token_length_visualization(self, dataset: DatasetDict, save_path: str = "tmp.png", bins: int = 30):
+    def get_token_length_visualization(
+        self, dataset: DatasetDict, save_path: str = "tmp.png", bins: int = 30
+    ):
         return super().get_token_length_visualization(
             features=[
                 INPUT_IDS_PROMPT_KEY,
@@ -400,17 +435,25 @@ class SFTDatasetProcessor(DatasetProcessor):
                 prompt,
                 add_generation_prompt=True,
             )
-            row[INPUT_IDS_KEY] = self.tokenizer.apply_chat_template(row[self.config.sft_messages_key])
+            row[INPUT_IDS_KEY] = self.tokenizer.apply_chat_template(
+                row[self.config.sft_messages_key]
+            )
             row[ATTENTION_MASK_KEY] = [1] * len(row[INPUT_IDS_KEY])
             labels = copy.deepcopy(row[INPUT_IDS_KEY])
             if self.config.train_only_on_prompt:
-                labels[: len(row[INPUT_IDS_PROMPT_KEY])] = [-100] * len(row[INPUT_IDS_PROMPT_KEY])
+                labels[: len(row[INPUT_IDS_PROMPT_KEY])] = [-100] * len(
+                    row[INPUT_IDS_PROMPT_KEY]
+                )
             row[LABELS_KEY] = labels
             return row
 
         return dataset.map(
             tokenize_fn,
-            num_proc=get_num_proc(len(dataset), self.config.num_proc, APPLY_CHAT_TEMPLATE_EXAMPLE_PER_SECOND_PER_CPU),
+            num_proc=get_num_proc(
+                len(dataset),
+                self.config.num_proc,
+                APPLY_CHAT_TEMPLATE_EXAMPLE_PER_SECOND_PER_CPU,
+            ),
             load_from_cache_file=self.config.load_from_cache_file,
             desc="Tokenizing and reformatting SFT data",
         )
@@ -419,28 +462,41 @@ class SFTDatasetProcessor(DatasetProcessor):
         def filter_fn(row):
             max_prompt_token_length_ok = True
             if self.config.max_prompt_token_length is not None:
-                max_prompt_token_length_ok = len(row[INPUT_IDS_PROMPT_KEY]) <= self.config.max_prompt_token_length
+                max_prompt_token_length_ok = (
+                    len(row[INPUT_IDS_PROMPT_KEY])
+                    <= self.config.max_prompt_token_length
+                )
 
             max_token_length_ok = True
             if self.config.max_token_length is not None:
-                max_token_length_ok = len(row[INPUT_IDS_KEY]) <= self.config.max_token_length
+                max_token_length_ok = (
+                    len(row[INPUT_IDS_KEY]) <= self.config.max_token_length
+                )
 
             contain_some_labels = any(x != -100 for x in row[LABELS_KEY])
             return (
-                max_prompt_token_length_ok and max_token_length_ok and (contain_some_labels or not need_contain_labels)
+                max_prompt_token_length_ok
+                and max_token_length_ok
+                and (contain_some_labels or not need_contain_labels)
             )
 
         return dataset.filter(
             filter_fn,
-            num_proc=get_num_proc(len(dataset), self.config.num_proc, FILTER_EXAMPLE_PER_SECOND_PER_CPU),
+            num_proc=get_num_proc(
+                len(dataset), self.config.num_proc, FILTER_EXAMPLE_PER_SECOND_PER_CPU
+            ),
             load_from_cache_file=self.config.load_from_cache_file,
             desc="Filtering SFT data",
         )
 
     def get_token_length_stats(self, dataset: Union[Dataset, DatasetDict]):
-        return super().get_token_length_stats(features=[INPUT_IDS_PROMPT_KEY, INPUT_IDS_KEY], dataset=dataset)
+        return super().get_token_length_stats(
+            features=[INPUT_IDS_PROMPT_KEY, INPUT_IDS_KEY], dataset=dataset
+        )
 
-    def get_token_length_visualization(self, dataset: DatasetDict, save_path: str = "tmp.png", bins: int = 30):
+    def get_token_length_visualization(
+        self, dataset: DatasetDict, save_path: str = "tmp.png", bins: int = 30
+    ):
         return super().get_token_length_visualization(
             features=[INPUT_IDS_PROMPT_KEY, INPUT_IDS_KEY],
             dataset=dataset,
@@ -460,11 +516,15 @@ class SFTGroundTruthDatasetProcessor(DatasetProcessor):
                 prompt,
                 add_generation_prompt=True,
             )
-            row[INPUT_IDS_KEY] = self.tokenizer.apply_chat_template(row[self.config.sft_messages_key])
+            row[INPUT_IDS_KEY] = self.tokenizer.apply_chat_template(
+                row[self.config.sft_messages_key]
+            )
             row[ATTENTION_MASK_KEY] = [1] * len(row[INPUT_IDS_KEY])
             labels = copy.deepcopy(row[INPUT_IDS_KEY])
             if self.config.train_only_on_prompt:
-                labels[: len(row[INPUT_IDS_PROMPT_KEY])] = [-100] * len(row[INPUT_IDS_PROMPT_KEY])
+                labels[: len(row[INPUT_IDS_PROMPT_KEY])] = [-100] * len(
+                    row[INPUT_IDS_PROMPT_KEY]
+                )
             row[LABELS_KEY] = labels
             row[GROUND_TRUTHS_KEY] = row[self.config.ground_truths_key]
             row[DATASET_SOURCE_KEY] = row[self.config.dataset_source_key]
@@ -472,7 +532,11 @@ class SFTGroundTruthDatasetProcessor(DatasetProcessor):
 
         return dataset.map(
             tokenize_fn,
-            num_proc=get_num_proc(len(dataset), self.config.num_proc, APPLY_CHAT_TEMPLATE_EXAMPLE_PER_SECOND_PER_CPU),
+            num_proc=get_num_proc(
+                len(dataset),
+                self.config.num_proc,
+                APPLY_CHAT_TEMPLATE_EXAMPLE_PER_SECOND_PER_CPU,
+            ),
             load_from_cache_file=self.config.load_from_cache_file,
             desc="Tokenizing and reformatting SFT data",
         )
@@ -481,28 +545,41 @@ class SFTGroundTruthDatasetProcessor(DatasetProcessor):
         def filter_fn(row):
             max_prompt_token_length_ok = True
             if self.config.max_prompt_token_length is not None:
-                max_prompt_token_length_ok = len(row[INPUT_IDS_PROMPT_KEY]) <= self.config.max_prompt_token_length
+                max_prompt_token_length_ok = (
+                    len(row[INPUT_IDS_PROMPT_KEY])
+                    <= self.config.max_prompt_token_length
+                )
 
             max_token_length_ok = True
             if self.config.max_token_length is not None:
-                max_token_length_ok = len(row[INPUT_IDS_KEY]) <= self.config.max_token_length
+                max_token_length_ok = (
+                    len(row[INPUT_IDS_KEY]) <= self.config.max_token_length
+                )
 
             contain_some_labels = any(x != -100 for x in row[LABELS_KEY])
             return (
-                max_prompt_token_length_ok and max_token_length_ok and (contain_some_labels or not need_contain_labels)
+                max_prompt_token_length_ok
+                and max_token_length_ok
+                and (contain_some_labels or not need_contain_labels)
             )
 
         return dataset.filter(
             filter_fn,
-            num_proc=get_num_proc(len(dataset), self.config.num_proc, FILTER_EXAMPLE_PER_SECOND_PER_CPU),
+            num_proc=get_num_proc(
+                len(dataset), self.config.num_proc, FILTER_EXAMPLE_PER_SECOND_PER_CPU
+            ),
             load_from_cache_file=self.config.load_from_cache_file,
             desc="Filtering SFT data",
         )
 
     def get_token_length_stats(self, dataset: Union[Dataset, DatasetDict]):
-        return super().get_token_length_stats(features=[INPUT_IDS_PROMPT_KEY, INPUT_IDS_KEY], dataset=dataset)
+        return super().get_token_length_stats(
+            features=[INPUT_IDS_PROMPT_KEY, INPUT_IDS_KEY], dataset=dataset
+        )
 
-    def get_token_length_visualization(self, dataset: DatasetDict, save_path: str = "tmp.png", bins: int = 30):
+    def get_token_length_visualization(
+        self, dataset: DatasetDict, save_path: str = "tmp.png", bins: int = 30
+    ):
         return super().get_token_length_visualization(
             features=[INPUT_IDS_PROMPT_KEY, INPUT_IDS_KEY],
             dataset=dataset,
@@ -543,8 +620,12 @@ class SimplePreferenceCollator:
         max_length_chosen = -1
         max_length_rejected = -1
         for i in range(len(batch)):
-            max_length_chosen = max(max_length_chosen, len(batch[i]["input_ids_chosen"]))
-            max_length_rejected = max(max_length_rejected, len(batch[i]["input_ids_rejected"]))
+            max_length_chosen = max(
+                max_length_chosen, len(batch[i]["input_ids_chosen"])
+            )
+            max_length_rejected = max(
+                max_length_rejected, len(batch[i]["input_ids_rejected"])
+            )
         max_length = max(max_length_chosen, max_length_rejected)
         assert max_length > 0, "the dataset is empty"
 
@@ -561,7 +642,9 @@ class SimplePreferenceCollator:
             padding_chosen = [self.pad_token_id] * pad_length_chosen
             padding_rejected = [self.pad_token_id] * pad_length_rejected
             padded_sequence_chosen = batch[i][INPUT_IDS_CHOSEN_KEY] + padding_chosen
-            padded_sequence_rejected = batch[i][INPUT_IDS_REJECTED_KEY] + padding_rejected
+            padded_sequence_rejected = (
+                batch[i][INPUT_IDS_REJECTED_KEY] + padding_rejected
+            )
             padded_sequences_chosen.append(padded_sequence_chosen)
             padded_sequences_rejected.append(padded_sequence_rejected)
 
@@ -659,4 +742,7 @@ if __name__ == "__main__":
     assert get_num_proc(1500, 120, APPLY_CHAT_TEMPLATE_EXAMPLE_PER_SECOND_PER_CPU) == 3
 
     # too much data; it should use all available CPUs
-    assert get_num_proc(1000000, 120, APPLY_CHAT_TEMPLATE_EXAMPLE_PER_SECOND_PER_CPU) == 120
+    assert (
+        get_num_proc(1000000, 120, APPLY_CHAT_TEMPLATE_EXAMPLE_PER_SECOND_PER_CPU)
+        == 120
+    )

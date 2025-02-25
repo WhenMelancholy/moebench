@@ -105,21 +105,30 @@ def custom_initialize_model_parallel(
     # Build the tensor model-parallel groups.
     num_tensor_model_parallel_groups: int = world_size // tensor_model_parallel_size
     # global _TP
-    assert vllm.distributed.parallel_state._TP is None, "tensor model parallel group is already initialized"
+    assert (
+        vllm.distributed.parallel_state._TP is None
+    ), "tensor model parallel group is already initialized"
     group_ranks = []
     for i in range(num_tensor_model_parallel_groups):
-        ranks = list(range(i * tensor_model_parallel_size, (i + 1) * tensor_model_parallel_size))
+        ranks = list(
+            range(i * tensor_model_parallel_size, (i + 1) * tensor_model_parallel_size)
+        )
         group_ranks.append(ranks)
 
     # message queue broadcaster is only used in tensor model parallel group
     vllm.distributed.parallel_state._TP = init_model_parallel_group(
-        group_ranks, get_world_group().local_rank, backend, use_message_queue_broadcaster=True
+        group_ranks,
+        get_world_group().local_rank,
+        backend,
+        use_message_queue_broadcaster=True,
     )
 
     # Build the pipeline model-parallel groups.
     num_pipeline_model_parallel_groups: int = world_size // pipeline_model_parallel_size
     # global _PP
-    assert vllm.distributed.parallel_state._PP is None, "pipeline model parallel group is already initialized"
+    assert (
+        vllm.distributed.parallel_state._PP is None
+    ), "pipeline model parallel group is already initialized"
     group_ranks = []
     for i in range(num_pipeline_model_parallel_groups):
         ranks = list(range(i, world_size, num_pipeline_model_parallel_groups))
@@ -130,7 +139,9 @@ def custom_initialize_model_parallel(
     )
 
 
-def init_world_group(ranks: List[int], local_rank: int, backend: str) -> GroupCoordinator:
+def init_world_group(
+    ranks: List[int], local_rank: int, backend: str
+) -> GroupCoordinator:
     return GroupCoordinator(
         group_ranks=[[0]],  # SingleGPULLM logic: only use a single GPU
         local_rank=local_rank,
@@ -153,5 +164,7 @@ def _init_executor(self) -> None:
 # monkey patch the function
 def vllm_single_gpu_patch():
     vllm.distributed.parallel_state.init_world_group = init_world_group
-    vllm.distributed.parallel_state.initialize_model_parallel = custom_initialize_model_parallel
+    vllm.distributed.parallel_state.initialize_model_parallel = (
+        custom_initialize_model_parallel
+    )
     GPUExecutor._init_executor = _init_executor

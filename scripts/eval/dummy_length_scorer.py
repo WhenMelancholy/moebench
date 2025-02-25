@@ -1,24 +1,37 @@
-'''
+"""
 Dummy evaluator that uses a given metric to determine winners in pairwise comparisons. Used to further investigate correlations.
-'''
+"""
 import argparse
-from transformers import AutoTokenizer
-from datasets import load_dataset
 import json
 
+from datasets import load_dataset
+from transformers import AutoTokenizer
+
 parser = argparse.ArgumentParser()
-parser.add_argument("--candidate_file", type=str, help="Candidate file for candidate model outputs.")
-parser.add_argument("--metric", default="unique", type=str, help="Metric to use for comparison.")
-parser.add_argument("--tokenizer", default="/net/nfs.cirrascale/allennlp/yizhongw/hf_llama_models/7B", type=str, help="Tokenizer to use for tokenization.")
+parser.add_argument(
+    "--candidate_file", type=str, help="Candidate file for candidate model outputs."
+)
+parser.add_argument(
+    "--metric", default="unique", type=str, help="Metric to use for comparison."
+)
+parser.add_argument(
+    "--tokenizer",
+    default="/net/nfs.cirrascale/allennlp/yizhongw/hf_llama_models/7B",
+    type=str,
+    help="Tokenizer to use for tokenization.",
+)
 args = parser.parse_args()
 
 tokenizer = AutoTokenizer.from_pretrained(args.tokenizer, use_fast=False)
 
+
 def count_unique_tokens(text):
     return len(set(tokenizer(text).input_ids))
 
+
 def count_token_length(text):
     return len(tokenizer(text).input_ids)
+
 
 metric_map = {
     "unique": count_unique_tokens,

@@ -1,19 +1,24 @@
-from collections import defaultdict, Counter
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Union, Iterable, Dict
 import itertools
+from collections import Counter, defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Dict, Iterable, List, Union
 
 import numpy as np
 import tqdm
 
-from eval.codex_humaneval.data import HUMAN_EVAL, read_problems, stream_jsonl, write_jsonl
+from eval.codex_humaneval.data import (
+    HUMAN_EVAL,
+    read_problems,
+    stream_jsonl,
+    write_jsonl,
+)
 from eval.codex_humaneval.execution import check_correctness
 
 
 def estimate_pass_at_k(
     num_samples: Union[int, List[int], np.ndarray],
     num_correct: Union[List[int], np.ndarray],
-    k: int
+    k: int,
 ) -> np.ndarray:
     """
     Estimates pass@k of each problem and returns them in an array.
@@ -33,7 +38,9 @@ def estimate_pass_at_k(
         assert len(num_samples) == len(num_correct)
         num_samples_it = iter(num_samples)
 
-    return np.array([estimator(int(n), int(c), k) for n, c in zip(num_samples_it, num_correct)])
+    return np.array(
+        [estimator(int(n), int(c), k) for n, c in zip(num_samples_it, num_correct)]
+    )
 
 
 def evaluate_functional_correctness(
@@ -41,7 +48,7 @@ def evaluate_functional_correctness(
     k: List[int] = [1, 10, 100],
     n_workers: int = 4,
     timeout: float = 3.0,
-    problems = None,
+    problems=None,
     problem_file: str = HUMAN_EVAL,
 ):
     """
@@ -54,7 +61,6 @@ def evaluate_functional_correctness(
 
     # Check the generated samples against test suites.
     with ThreadPoolExecutor(max_workers=n_workers) as executor:
-
         futures = []
         completion_id = Counter()
         n_samples = 0
@@ -88,8 +94,11 @@ def evaluate_functional_correctness(
     correct = np.array(correct)
 
     ks = k
-    pass_at_k = {f"pass@{k}": estimate_pass_at_k(total, correct, k).mean()
-                 for k in ks if (total >= k).all()}
+    pass_at_k = {
+        f"pass@{k}": estimate_pass_at_k(total, correct, k).mean()
+        for k in ks
+        if (total >= k).all()
+    }
 
     # Finally, save the results in one file:
     def combine_results():

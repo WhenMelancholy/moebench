@@ -9,9 +9,21 @@ ALL_ASPECTS = ["helpfulness", "correctness", "coherence", "complexity", "verbosi
 
 WEIGHT_SETS = [
     # 340b
-    {"helpfulness": 0.3, "correctness": 0.74, "coherence": 0.46, "complexity": 0.47, "verbosity": -0.33},
+    {
+        "helpfulness": 0.3,
+        "correctness": 0.74,
+        "coherence": 0.46,
+        "complexity": 0.47,
+        "verbosity": -0.33,
+    },
     # 70b helpsteer2 lm
-    {"helpfulness": 0.65, "correctness": 0.8, "coherence": 0.45, "complexity": 0.55, "verbosity": -0.4},
+    {
+        "helpfulness": 0.65,
+        "correctness": 0.8,
+        "coherence": 0.45,
+        "complexity": 0.55,
+        "verbosity": -0.4,
+    },
 ]
 
 
@@ -33,7 +45,9 @@ def binarize_dataset(dataset, min_score: Optional[float]):
         # weights = random.choice(WEIGHT_SETS)
         weights = WEIGHT_SETS[1]  # change this to 0 for 340B config
 
-        sorted_responses = sorted(responses, key=lambda x: weighted_score(x, weights), reverse=True)
+        sorted_responses = sorted(
+            responses, key=lambda x: weighted_score(x, weights), reverse=True
+        )
         chosen = sorted_responses[0]
         rejected = sorted_responses[-1]
 
@@ -50,8 +64,14 @@ def binarize_dataset(dataset, min_score: Optional[float]):
 
         binarized_example = {
             "prompt": prompt,
-            "chosen": [{"role": "user", "content": prompt}, {"role": "assistant", "content": chosen["response"]}],
-            "rejected": [{"role": "user", "content": prompt}, {"role": "assistant", "content": rejected["response"]}],
+            "chosen": [
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": chosen["response"]},
+            ],
+            "rejected": [
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": rejected["response"]},
+            ],
             "weighted_scores": (round(chosen_score, 2), round(rejected_score, 2)),
         }
         binarized_data.append(binarized_example)
@@ -96,9 +116,16 @@ if __name__ == "__main__":
         description="Binarize HelpSteer 2 dataset using NVIDIA's specification and optionally upload to Hugging Face Hub."
     )
     parser.add_argument(
-        "--min_score", type=float, default=None, help="Minimum weighted score for chosen responses (default: None)"
+        "--min_score",
+        type=float,
+        default=None,
+        help="Minimum weighted score for chosen responses (default: None)",
     )
-    parser.add_argument("--push_to_hub", action="store_true", help="Upload the dataset to Hugging Face Hub")
+    parser.add_argument(
+        "--push_to_hub",
+        action="store_true",
+        help="Upload the dataset to Hugging Face Hub",
+    )
     parser.add_argument(
         "--hf_entity",
         type=str,

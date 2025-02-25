@@ -143,7 +143,12 @@ class Args:
     learning_rate: float = 2e-5
     """The initial learning rate for AdamW optimizer."""
     lr_scheduler_type: Literal[
-        "linear", "cosine", "cosine_with_restarts", "polynomial", "constant", "constant_with_warmup"
+        "linear",
+        "cosine",
+        "cosine_with_restarts",
+        "polynomial",
+        "constant",
+        "constant_with_warmup",
     ] = "linear"
     """Which scheduler to use"""
     warm_up_steps: int = 0
@@ -302,7 +307,9 @@ class Args:
     """What dataset to upload the metadata to. If unset, don't upload metadata"""
 
     def __post_init__(self):
-        assert self.number_samples_per_prompt > 1, "Number of samples per prompt must be greater than 1 for GRPO!"
+        assert (
+            self.number_samples_per_prompt > 1
+        ), "Number of samples per prompt must be greater than 1 for GRPO!"
 
 
 def process_dataset_mixer(value) -> Tuple[Optional[dict], Optional[str]]:
@@ -330,8 +337,12 @@ def calculate_runtime_args(args: Args, model_config: ModelConfig):
     args.micro_batch_size = int(args.per_device_train_batch_size * args.world_size)
     args.rollout_batch_size = int(args.local_rollout_batch_size * args.world_size)
     args.mini_batch_size = int(args.local_mini_batch_size * args.world_size)
-    args.num_mini_batches = exact_div((args.rollout_batch_size * args.number_samples_per_prompt), args.mini_batch_size)
-    args.num_training_steps = args.total_episodes // (args.rollout_batch_size * args.number_samples_per_prompt)
+    args.num_mini_batches = exact_div(
+        (args.rollout_batch_size * args.number_samples_per_prompt), args.mini_batch_size
+    )
+    args.num_training_steps = args.total_episodes // (
+        args.rollout_batch_size * args.number_samples_per_prompt
+    )
     args.eval_freq = max(1, args.num_training_steps // args.num_evals)
     # PPO logic: do checks and set up dataloader batch size
     if args.whiten_rewards:
@@ -349,7 +360,9 @@ def calculate_runtime_args(args: Args, model_config: ModelConfig):
         args.hf_repo_id = f"{args.hf_entity}/{args.hf_repo_id}"
         if args.hf_repo_revision is None:  # auto-generate one
             args.hf_repo_revision = args.run_name
-        args.hf_repo_url = f"https://huggingface.co/{args.hf_repo_id}/tree/{args.hf_repo_revision}"
+        args.hf_repo_url = (
+            f"https://huggingface.co/{args.hf_repo_id}/tree/{args.hf_repo_revision}"
+        )
 
     if args.with_tracking:
         if args.wandb_entity is None:
@@ -399,7 +412,9 @@ def get_train_ds_config(
         "gradient_clipping": max_norm,
         "prescale_gradients": False,
         "wall_clock_breakdown": False,
-        "data_types": {"grad_accum_dtype": grad_accum_dtype if grad_accum_dtype else "fp32"},
+        "data_types": {
+            "grad_accum_dtype": grad_accum_dtype if grad_accum_dtype else "fp32"
+        },
     }
 
 
@@ -430,7 +445,13 @@ def get_eval_ds_config(
 def get_optimizer_grouped_parameters(
     model,
     weight_decay,
-    no_decay_name_list=["bias", "layer_norm.weight", "layernorm.weight", "norm.weight", "ln_f.weight"],
+    no_decay_name_list=[
+        "bias",
+        "layer_norm.weight",
+        "layernorm.weight",
+        "norm.weight",
+        "ln_f.weight",
+    ],
 ):
     optimizer_grouped_parameters = [
         {
@@ -454,10 +475,16 @@ def get_optimizer_grouped_parameters(
 
 
 def _z3_params_to_fetch(param_list):
-    return [p for p in param_list if hasattr(p, "ds_id") and p.ds_status == ZeroParamStatus.NOT_AVAILABLE]
+    return [
+        p
+        for p in param_list
+        if hasattr(p, "ds_id") and p.ds_status == ZeroParamStatus.NOT_AVAILABLE
+    ]
 
 
-def masked_mean(values: torch.Tensor, mask: torch.Tensor, axis: Optional[bool] = None) -> torch.Tensor:
+def masked_mean(
+    values: torch.Tensor, mask: torch.Tensor, axis: Optional[bool] = None
+) -> torch.Tensor:
     """Compute mean of tensor with a masked values."""
     if axis is not None:
         return (values * mask).sum(axis=axis) / mask.sum(axis=axis)
@@ -465,7 +492,9 @@ def masked_mean(values: torch.Tensor, mask: torch.Tensor, axis: Optional[bool] =
         return (values * mask).sum() / mask.sum()
 
 
-def masked_var(values: torch.Tensor, mask: torch.Tensor, unbiased: bool = True) -> torch.Tensor:
+def masked_var(
+    values: torch.Tensor, mask: torch.Tensor, unbiased: bool = True
+) -> torch.Tensor:
     """Compute variance of tensor with masked values."""
     mean = masked_mean(values, mask)
     centered_values = values - mean
@@ -484,7 +513,9 @@ def masked_var(values: torch.Tensor, mask: torch.Tensor, unbiased: bool = True) 
     return variance
 
 
-def masked_whiten(values: torch.Tensor, mask: torch.Tensor, shift_mean: bool = True) -> torch.Tensor:
+def masked_whiten(
+    values: torch.Tensor, mask: torch.Tensor, shift_mean: bool = True
+) -> torch.Tensor:
     """Whiten values with masked values."""
     mean, var = masked_mean(values, mask), masked_var(values, mask)
     whitened = (values - mean) * torch.rsqrt(var + 1e-8)
@@ -494,14 +525,19 @@ def masked_whiten(values: torch.Tensor, mask: torch.Tensor, shift_mean: bool = T
 
 
 def remove_padding(sequences, pad_token_id):
-    return [[inneritem for inneritem in item if inneritem != pad_token_id] for item in sequences]
+    return [
+        [inneritem for inneritem in item if inneritem != pad_token_id]
+        for item in sequences
+    ]
 
 
 class MetricsTracker:
     """A simple class to prellocate all metrics in an array
     so we can do only one allreduce operation to get the metrics mean"""
 
-    def __init__(self, max_metrics: int = 32, device: torch.device = torch.device("cuda")):
+    def __init__(
+        self, max_metrics: int = 32, device: torch.device = torch.device("cuda")
+    ):
         self.metrics = torch.zeros(max_metrics, device=device)
         self.names2idx = {}
         self.current_idx = 0
@@ -510,7 +546,9 @@ class MetricsTracker:
     def add(self, name: str, value: torch.tensor):
         if name not in self.names2idx:
             if self.current_idx >= self.max_metrics:
-                raise ValueError(f"Exceeded maximum number of metrics ({self.max_metrics})")
+                raise ValueError(
+                    f"Exceeded maximum number of metrics ({self.max_metrics})"
+                )
             self.names2idx[name] = self.current_idx
             self.current_idx += 1
 
@@ -597,7 +635,11 @@ class RayProcess:
 @ray.remote(num_gpus=1)
 class PolicyTrainerRayProcess(RayProcess):
     def from_pretrained(
-        self, args: Args, model_config: ModelConfig, beaker_config: BeakerRuntimeConfig, wandb_url: str
+        self,
+        args: Args,
+        model_config: ModelConfig,
+        beaker_config: BeakerRuntimeConfig,
+        wandb_url: str,
     ):
         self.args = args
         self.model_config = model_config
@@ -641,8 +683,12 @@ class PolicyTrainerRayProcess(RayProcess):
         # weight_decay = 0.0
         # optim_params = get_optimizer_grouped_parameters(self.policy, weight_decay)
         # self.optimizer = AdamOptimizer(optim_params, lr=args.learning_rate)
-        self.optimizer = torch.optim.AdamW(self.policy.parameters(), lr=args.learning_rate)
-        num_scheduler_steps = args.num_training_steps * args.num_epochs * args.num_mini_batches
+        self.optimizer = torch.optim.AdamW(
+            self.policy.parameters(), lr=args.learning_rate
+        )
+        num_scheduler_steps = (
+            args.num_training_steps * args.num_epochs * args.num_mini_batches
+        )
         warm_up_steps = args.warm_up_steps
         if args.warmup_ratio >= 0.0:
             warm_up_steps = int(num_scheduler_steps * args.warmup_ratio)
@@ -690,18 +736,22 @@ class PolicyTrainerRayProcess(RayProcess):
             use_cache=False,
         )
         disable_dropout_in_model(self.ref_policy)
-        self.ref_policy, *_ = deepspeed.initialize(model=self.ref_policy, config=ds_config)
+        self.ref_policy, *_ = deepspeed.initialize(
+            model=self.ref_policy, config=ds_config
+        )
         self.ref_policy.eval()
 
         # reward model
         if args.reward_model_multiplier:
-            self.reward_model: PreTrainedModel = AutoModelForSequenceClassification.from_pretrained(
-                args.reward_model_path,
-                revision=args.reward_model_revision,
-                num_labels=1,
-                torch_dtype=torch.bfloat16,
-                attn_implementation="flash_attention_2",
-                use_cache=False,
+            self.reward_model: PreTrainedModel = (
+                AutoModelForSequenceClassification.from_pretrained(
+                    args.reward_model_path,
+                    revision=args.reward_model_revision,
+                    num_labels=1,
+                    torch_dtype=torch.bfloat16,
+                    attn_implementation="flash_attention_2",
+                    use_cache=False,
+                )
             )
             disable_dropout_in_model(self.reward_model)
             ds_config = get_eval_ds_config(
@@ -711,9 +761,13 @@ class PolicyTrainerRayProcess(RayProcess):
                 stage=args.deepspeed_stage if args.deepspeed_stage == 3 else 0,
                 bf16=True,
             )
-            ds_config["train_micro_batch_size_per_gpu"] = args.per_device_train_batch_size
+            ds_config[
+                "train_micro_batch_size_per_gpu"
+            ] = args.per_device_train_batch_size
             ds_config["train_batch_size"] = args.mini_batch_size
-            self.reward_model, *_ = deepspeed.initialize(model=self.reward_model, config=ds_config)
+            self.reward_model, *_ = deepspeed.initialize(
+                model=self.reward_model, config=ds_config
+            )
             self.reward_model.eval()
 
         assert (
@@ -801,36 +855,56 @@ class PolicyTrainerRayProcess(RayProcess):
             count, num_params = 0, len(list(model.named_parameters()))
             refss = []
             if args.gather_whole_model:
-                with deepspeed.zero.GatheredParameters(model.parameters(), enabled=args.deepspeed_stage == 3):
+                with deepspeed.zero.GatheredParameters(
+                    model.parameters(), enabled=args.deepspeed_stage == 3
+                ):
                     for name, param in model.named_parameters():
                         count += 1  # empty_cache at last param
                         # Fire all vllm engines for broadcast
                         if torch.distributed.get_rank() == 0:
-                            shape = param.shape if args.deepspeed_stage != 3 else param.ds_shape
+                            shape = (
+                                param.shape
+                                if args.deepspeed_stage != 3
+                                else param.ds_shape
+                            )
                             refs = [
                                 engine.update_weight.remote(
-                                    name, dtype=param.dtype, shape=shape, empty_cache=count == num_params
+                                    name,
+                                    dtype=param.dtype,
+                                    shape=shape,
+                                    empty_cache=count == num_params,
                                 )
                                 for engine in vllm_engines
                             ]
                             refss.extend(refs)
                         if torch.distributed.get_rank() == 0:
-                            torch.distributed.broadcast(param.data, 0, group=self.model_update_group)
+                            torch.distributed.broadcast(
+                                param.data, 0, group=self.model_update_group
+                            )
             else:  # broadcast each parameter independently
                 for name, param in model.named_parameters():
                     count += 1
                     if torch.distributed.get_rank() == 0:
-                        shape = param.shape if args.deepspeed_stage != 3 else param.ds_shape
+                        shape = (
+                            param.shape if args.deepspeed_stage != 3 else param.ds_shape
+                        )
                         refs = [
                             engine.update_weight.remote(
-                                name, dtype=param.dtype, shape=shape, empty_cache=count == num_params
+                                name,
+                                dtype=param.dtype,
+                                shape=shape,
+                                empty_cache=count == num_params,
                             )
                             for engine in vllm_engines
                         ]
                         refss.extend(refs)
-                    with deepspeed.zero.GatheredParameters([param], enabled=args.deepspeed_stage == 3):
+                    with deepspeed.zero.GatheredParameters(
+                        [param], enabled=args.deepspeed_stage == 3
+                    ):
                         if torch.distributed.get_rank() == 0:
-                            torch.distributed.broadcast(param.data, 0, group=self.model_update_group)
+                            torch.distributed.broadcast(
+                                param.data, 0, group=self.model_update_group
+                            )
             if torch.distributed.get_rank() == 0:
                 ray.get(refss)
 
@@ -842,7 +916,9 @@ class PolicyTrainerRayProcess(RayProcess):
                 args.stop_token_id = tokenizer.encode(".")[0]
         # data_collator = SimpleGenerateCollator(pad_token_id=tokenizer.pad_token_id)
         train_dataset_idxs = np.arange(len(train_dataset))
-        shuffling_iter = ShufflingIterator(train_dataset_idxs, args.rollout_batch_size, seed=args.seed)
+        shuffling_iter = ShufflingIterator(
+            train_dataset_idxs, args.rollout_batch_size, seed=args.seed
+        )
 
         # hack to left pad
         def repeat_generator():
@@ -877,7 +953,9 @@ class PolicyTrainerRayProcess(RayProcess):
         num_eval_samples = 32
         sample_evaluation_prompt_token_ids = None
         if eval_dataset is not None:
-            sample_evaluation_prompt_token_ids = eval_dataset[:num_eval_samples][INPUT_IDS_PROMPT_KEY]
+            sample_evaluation_prompt_token_ids = eval_dataset[:num_eval_samples][
+                INPUT_IDS_PROMPT_KEY
+            ]
 
         def vllm_generate(
             generation_config: SamplingParams,
@@ -889,16 +967,21 @@ class PolicyTrainerRayProcess(RayProcess):
             eval_freq: int,
             resume_training_step: int,
         ):
-            def generate_with_engines(prompts: List[List[int]], sampling_params: SamplingParams):
+            def generate_with_engines(
+                prompts: List[List[int]], sampling_params: SamplingParams
+            ):
                 # Split queries between engines
                 queries_per_engine = math.ceil(len(prompts) / len(vllm_engines))
                 split_queries = [
-                    prompts[i : i + queries_per_engine] for i in range(0, len(prompts), queries_per_engine)
+                    prompts[i : i + queries_per_engine]
+                    for i in range(0, len(prompts), queries_per_engine)
                 ]
                 # Generate responses in parallel across engines
                 futures = [
                     vllm_engine.generate.remote(
-                        sampling_params=sampling_params, prompt_token_ids=queries, use_tqdm=False
+                        sampling_params=sampling_params,
+                        prompt_token_ids=queries,
+                        use_tqdm=False,
                     )
                     for vllm_engine, queries in zip(vllm_engines, split_queries)
                 ]
@@ -906,7 +989,13 @@ class PolicyTrainerRayProcess(RayProcess):
                 all_outputs = ray.get(futures)
                 response_ids = []
                 for outputs in all_outputs:
-                    response_ids.extend([list(out.token_ids) for output in outputs for out in output.outputs])
+                    response_ids.extend(
+                        [
+                            list(out.token_ids)
+                            for output in outputs
+                            for out in output.outputs
+                        ]
+                    )
                 return response_ids
 
             for training_step in range(resume_training_step, num_training_steps + 1):
@@ -917,11 +1006,16 @@ class PolicyTrainerRayProcess(RayProcess):
 
                 generation_start_time = time.time()
                 response_ids = generate_with_engines(g_queries_list, generation_config)
-                print(f"🔥🔥🔥 Generation time: {time.time() - generation_start_time:.2f} seconds")
+                print(
+                    f"🔥🔥🔥 Generation time: {time.time() - generation_start_time:.2f} seconds"
+                )
                 response_ids_Q.put(response_ids)
 
                 # Evaluate the model
-                if sample_evaluation_prompt_token_ids is not None and (training_step - 1) % eval_freq == 0:
+                if (
+                    sample_evaluation_prompt_token_ids is not None
+                    and (training_step - 1) % eval_freq == 0
+                ):
                     response_ids = generate_with_engines(
                         sample_evaluation_prompt_token_ids, evaluation_generation_config
                     )
@@ -948,7 +1042,10 @@ class PolicyTrainerRayProcess(RayProcess):
         # set up the metrics and initial states
         device = torch.device(self.local_rank)
         g_vllm_responses = torch.zeros(
-            (args.rollout_batch_size * args.number_samples_per_prompt, args.response_length),
+            (
+                args.rollout_batch_size * args.number_samples_per_prompt,
+                args.response_length,
+            ),
             device=device,
             dtype=torch.long,
         )
@@ -958,10 +1055,22 @@ class PolicyTrainerRayProcess(RayProcess):
             args.gradient_accumulation_steps,
         )
         non_score_reward_sum_stats = torch.zeros(stats_shape, device=device)
-        kl1_stats = torch.zeros((args.local_rollout_batch_size * args.number_samples_per_prompt), device=device)
-        kl2_stats = torch.zeros((args.local_rollout_batch_size * args.number_samples_per_prompt), device=device)
-        kl3_stats = torch.zeros((args.local_rollout_batch_size * args.number_samples_per_prompt), device=device)
-        kl4_stats = torch.zeros((args.local_rollout_batch_size * args.number_samples_per_prompt), device=device)
+        kl1_stats = torch.zeros(
+            (args.local_rollout_batch_size * args.number_samples_per_prompt),
+            device=device,
+        )
+        kl2_stats = torch.zeros(
+            (args.local_rollout_batch_size * args.number_samples_per_prompt),
+            device=device,
+        )
+        kl3_stats = torch.zeros(
+            (args.local_rollout_batch_size * args.number_samples_per_prompt),
+            device=device,
+        )
+        kl4_stats = torch.zeros(
+            (args.local_rollout_batch_size * args.number_samples_per_prompt),
+            device=device,
+        )
         approxkl_stats = torch.zeros(stats_shape, device=device)
         pg_clipfrac_stats = torch.zeros(stats_shape, device=device)
         pg_loss_stats = torch.zeros(stats_shape, device=device)
@@ -977,7 +1086,11 @@ class PolicyTrainerRayProcess(RayProcess):
         start_time = time.time()
         global_data = next(iter_dataloader)
         data = data_collator(
-            global_data[self.rank * args.local_rollout_batch_size : (self.rank + 1) * args.local_rollout_batch_size]
+            global_data[
+                self.rank
+                * args.local_rollout_batch_size : (self.rank + 1)
+                * args.local_rollout_batch_size
+            ]
         )
         global_queries = data_collator(global_data)[
             INPUT_IDS_PROMPT_KEY
@@ -986,13 +1099,17 @@ class PolicyTrainerRayProcess(RayProcess):
         ground_truths_next = data[GROUND_TRUTHS_KEY]
         datasets_next = data[DATASET_SOURCE_KEY]
         if accelerator.is_main_process:
-            param_prompt_Q.put((None, remove_padding(global_queries, tokenizer.pad_token_id)))
+            param_prompt_Q.put(
+                (None, remove_padding(global_queries, tokenizer.pad_token_id))
+            )
 
         # for _ in range(1, resume_training_step):  # we didn't store scheduler state
         #     scheduler.step()
 
         for training_step in range(resume_training_step, args.num_training_steps + 1):
-            episode += args.rollout_batch_size * args.number_samples_per_prompt  # each sample is an episode
+            episode += (
+                args.rollout_batch_size * args.number_samples_per_prompt
+            )  # each sample is an episode
             queries = queries_next
             ground_truths = ground_truths_next
             datasets = datasets_next
@@ -1003,9 +1120,14 @@ class PolicyTrainerRayProcess(RayProcess):
                     evaluation_responses = evaluation_Q.get(timeout=0.01)
                     print("🔥🔥🔥 Evaluation responses received")
                     table = {}
-                    table["prompt"] = tokenizer.batch_decode(sample_evaluation_prompt_token_ids)
+                    table["prompt"] = tokenizer.batch_decode(
+                        sample_evaluation_prompt_token_ids
+                    )
                     table["response"] = tokenizer.batch_decode(evaluation_responses)
-                    table["response"] = [item.replace(tokenizer.pad_token, "") for item in table["response"]]
+                    table["response"] = [
+                        item.replace(tokenizer.pad_token, "")
+                        for item in table["response"]
+                    ]
                     df = pd.DataFrame(table)
                     del table
                 except Empty:
@@ -1017,10 +1139,14 @@ class PolicyTrainerRayProcess(RayProcess):
                     global_data = next(iter_dataloader)
                     data = data_collator(
                         global_data[
-                            self.rank * args.local_rollout_batch_size : (self.rank + 1) * args.local_rollout_batch_size
+                            self.rank
+                            * args.local_rollout_batch_size : (self.rank + 1)
+                            * args.local_rollout_batch_size
                         ]
                     )
-                    global_queries = data_collator(global_data)[INPUT_IDS_PROMPT_KEY].tolist()
+                    global_queries = data_collator(global_data)[
+                        INPUT_IDS_PROMPT_KEY
+                    ].tolist()
                     queries_next = data[INPUT_IDS_PROMPT_KEY].to(device)
                     ground_truths_next = data[GROUND_TRUTHS_KEY]
                     datasets_next = data[DATASET_SOURCE_KEY]
@@ -1032,7 +1158,9 @@ class PolicyTrainerRayProcess(RayProcess):
                     print(
                         f"🔥🔥🔥 Loading weights using shared memory; Time to load weights: {time.perf_counter() - start_time:.2f} seconds"
                     )
-                    param_prompt_Q.put((None, remove_padding(global_queries, tokenizer.pad_token_id)))
+                    param_prompt_Q.put(
+                        (None, remove_padding(global_queries, tokenizer.pad_token_id))
+                    )
             else:
                 if training_step != 1:
                     # NOTE: important: the indent here is different for sync mode
@@ -1040,10 +1168,14 @@ class PolicyTrainerRayProcess(RayProcess):
                     global_data = next(iter_dataloader)
                     data = data_collator(
                         global_data[
-                            self.rank * args.local_rollout_batch_size : (self.rank + 1) * args.local_rollout_batch_size
+                            self.rank
+                            * args.local_rollout_batch_size : (self.rank + 1)
+                            * args.local_rollout_batch_size
                         ]
                     )
-                    global_queries = data_collator(global_data)[INPUT_IDS_PROMPT_KEY].tolist()
+                    global_queries = data_collator(global_data)[
+                        INPUT_IDS_PROMPT_KEY
+                    ].tolist()
                     queries_next = data[INPUT_IDS_PROMPT_KEY].to(device)
                     ground_truths_next = data[GROUND_TRUTHS_KEY]
                     datasets_next = data[DATASET_SOURCE_KEY]
@@ -1053,7 +1185,12 @@ class PolicyTrainerRayProcess(RayProcess):
                         print(
                             f"🔥🔥🔥 Loading weights using shared memory; Time to load weights: {time.time() - start_time:.2f} seconds"
                         )
-                        param_prompt_Q.put((None, remove_padding(global_queries, tokenizer.pad_token_id)))
+                        param_prompt_Q.put(
+                            (
+                                None,
+                                remove_padding(global_queries, tokenizer.pad_token_id),
+                            )
+                        )
                     queries = queries_next
                     ground_truths = ground_truths_next
                     datasets = datasets_next
@@ -1063,9 +1200,17 @@ class PolicyTrainerRayProcess(RayProcess):
             # if we generate multiple samples per prompt, we need to repeat the queries and ground truths
             # to match the vllm outputs.
             if args.number_samples_per_prompt > 1:
-                queries = queries.repeat_interleave(args.number_samples_per_prompt, dim=0)
-                ground_truths = [gt for gt in ground_truths for _ in range(args.number_samples_per_prompt)]
-                datasets = [ds for ds in datasets for _ in range(args.number_samples_per_prompt)]
+                queries = queries.repeat_interleave(
+                    args.number_samples_per_prompt, dim=0
+                )
+                ground_truths = [
+                    gt
+                    for gt in ground_truths
+                    for _ in range(args.number_samples_per_prompt)
+                ]
+                datasets = [
+                    ds for ds in datasets for _ in range(args.number_samples_per_prompt)
+                ]
 
             training_time_start = time.time()
             with torch.no_grad():
@@ -1083,14 +1228,19 @@ class PolicyTrainerRayProcess(RayProcess):
                         args.stop_token_id
                     )  # we can't use tokenizer.pad_token_id because it's outside vocab and `torch.gather(all_logprob, 2, response.unsqueeze(-1))` will error out
                     g_padded_response_ids = [
-                        response + [DUMMY_PAD_TOKEN] * (args.response_length - len(response))
+                        response
+                        + [DUMMY_PAD_TOKEN] * (args.response_length - len(response))
                         for response in g_response_token_ids
                     ]
-                    g_padded_response_ids = torch.tensor(g_padded_response_ids, device=device)
+                    g_padded_response_ids = torch.tensor(
+                        g_padded_response_ids, device=device
+                    )
                     g_vllm_responses[:] = g_padded_response_ids
                 dist.broadcast(g_vllm_responses, src=0)
                 local_vllm_responses = g_vllm_responses[
-                    accelerator.process_index * queries.shape[0] : (accelerator.process_index + 1) * queries.shape[0]
+                    accelerator.process_index
+                    * queries.shape[0] : (accelerator.process_index + 1)
+                    * queries.shape[0]
                 ]
                 # print(f"{local_vllm_responses.shape=}, {local_vllm_responses=}")
                 query_responses = torch.cat((queries, local_vllm_responses), 1)
@@ -1098,47 +1248,78 @@ class PolicyTrainerRayProcess(RayProcess):
                 if args.add_r1_style_format_reward:
                     decoded_response = tokenizer.batch_decode(local_vllm_responses)
                     format_scores = torch.tensor(
-                        soft_format_reward_func(decoded_response, args.r1_style_format_reward), device=device
+                        soft_format_reward_func(
+                            decoded_response, args.r1_style_format_reward
+                        ),
+                        device=device,
                     )
-                for i in range(0, queries.shape[0], args.local_rollout_forward_batch_size):
+                for i in range(
+                    0, queries.shape[0], args.local_rollout_forward_batch_size
+                ):
                     # print(f"get reward stuff starts {i=}")
                     query = queries[i : i + args.local_rollout_forward_batch_size]
-                    query_response = query_responses[i : i + args.local_rollout_forward_batch_size]
+                    query_response = query_responses[
+                        i : i + args.local_rollout_forward_batch_size
+                    ]
                     response = query_response[:, context_length:]
 
                     logprob = self.forward(
-                        query_response, response, tokenizer.pad_token_id, context_length, args.temperature
+                        query_response,
+                        response,
+                        tokenizer.pad_token_id,
+                        context_length,
+                        args.temperature,
                     )
                     torch.cuda.empty_cache()
 
-                    ref_output = forward(self.ref_policy, query_response, tokenizer.pad_token_id)
+                    ref_output = forward(
+                        self.ref_policy, query_response, tokenizer.pad_token_id
+                    )
                     ref_logits = ref_output.logits[:, context_length - 1 : -1]
                     ref_logits /= args.temperature + 1e-7
                     ref_all_logprob = F.log_softmax(ref_logits, dim=-1)
-                    ref_logprob = torch.gather(ref_all_logprob, 2, response.unsqueeze(-1)).squeeze(-1)
+                    ref_logprob = torch.gather(
+                        ref_all_logprob, 2, response.unsqueeze(-1)
+                    ).squeeze(-1)
                     del ref_output, ref_logits, ref_all_logprob
                     torch.cuda.empty_cache()
 
                     # Response Processing 1. truncate response after the first occurrence of `stop_token_id`
                     postprocessed_response = response
-                    if args.stop_token_id is not None:  # handle the edge case when stop_token_id exists but is 0
+                    if (
+                        args.stop_token_id is not None
+                    ):  # handle the edge case when stop_token_id exists but is 0
                         postprocessed_response = truncate_response(
                             args.stop_token_id, tokenizer.pad_token_id, response
                         )
                     # print("get reward stuff starts 2")
                     # Response Processing 2. run reward model on the truncated responses
-                    postprocessed_query_response = torch.cat((query, postprocessed_response), 1)
-                    sequence_length = first_true_indices(postprocessed_response == tokenizer.pad_token_id) - 1
+                    postprocessed_query_response = torch.cat(
+                        (query, postprocessed_response), 1
+                    )
+                    sequence_length = (
+                        first_true_indices(
+                            postprocessed_response == tokenizer.pad_token_id
+                        )
+                        - 1
+                    )
                     score = torch.zeros(query.shape[0], device=query.device)
                     if args.reward_model_multiplier:
                         _, score, _ = get_reward(
-                            self.reward_model, postprocessed_query_response, tokenizer.pad_token_id, context_length
+                            self.reward_model,
+                            postprocessed_query_response,
+                            tokenizer.pad_token_id,
+                            context_length,
                         )
                         score *= args.reward_model_multiplier
                     if args.apply_verifiable_reward:
                         # we need to batch the gt to match query.
-                        ground_truth = ground_truths[i : i + args.local_rollout_forward_batch_size]
-                        dataset = datasets[i : i + args.local_rollout_forward_batch_size]
+                        ground_truth = ground_truths[
+                            i : i + args.local_rollout_forward_batch_size
+                        ]
+                        dataset = datasets[
+                            i : i + args.local_rollout_forward_batch_size
+                        ]
                         verifiable_reward, verifiable_count = apply_verifiable_reward(
                             postprocessed_response,
                             postprocessed_query_response,
@@ -1152,7 +1333,9 @@ class PolicyTrainerRayProcess(RayProcess):
                         verifiable_count = torch.tensor([0.0], device=device).float()
 
                     if args.add_r1_style_format_reward:
-                        score += format_scores[i : i + args.local_rollout_forward_batch_size]
+                        score += format_scores[
+                            i : i + args.local_rollout_forward_batch_size
+                        ]
 
                     responses.append(response)
                     postprocessed_responses.append(postprocessed_response)
@@ -1179,27 +1362,47 @@ class PolicyTrainerRayProcess(RayProcess):
                 # Response Processing 3. filter response. Ensure that the sample contains stop_token_id
                 # responses not passing that filter will receive a low (fixed) score
                 # only query humans on responses that pass that filter
-                contain_stop_token = torch.any(postprocessed_responses == args.stop_token_id, dim=-1)
+                contain_stop_token = torch.any(
+                    postprocessed_responses == args.stop_token_id, dim=-1
+                )
                 # NOTE: only apply the stop token filter if the response is long enough
                 # otherwise the model could learn to generate the first token as the stop token
-                contain_stop_token = contain_stop_token & (sequence_lengths >= args.min_response_length)
+                contain_stop_token = contain_stop_token & (
+                    sequence_lengths >= args.min_response_length
+                )
                 if args.non_stop_penalty:
                     scores = torch.where(
-                        contain_stop_token, scores, torch.full_like(scores, args.penalty_reward_value)
+                        contain_stop_token,
+                        scores,
+                        torch.full_like(scores, args.penalty_reward_value),
                     )
 
                 # be very careful with `padding_mask_p1`; see https://excalidraw.com/#json=LWnzG4w2k5DjF_EOL_xPt,e2w3a-hFJ_gX5vOfeyXGTw
-                response_idxs = torch.arange(responses.shape[1], device=responses.device).repeat(responses.shape[0], 1)
+                response_idxs = torch.arange(
+                    responses.shape[1], device=responses.device
+                ).repeat(responses.shape[0], 1)
                 padding_mask = response_idxs > sequence_lengths.unsqueeze(1)
                 logprobs = torch.masked_fill(logprobs, padding_mask, INVALID_LOGPROB)
-                ref_logprobs = torch.masked_fill(ref_logprobs, padding_mask, INVALID_LOGPROB)
+                ref_logprobs = torch.masked_fill(
+                    ref_logprobs, padding_mask, INVALID_LOGPROB
+                )
 
                 # MAIN GRPO CHANGE: compute group rewards instead of value model output
-                mean_grouped_rewards = scores.view(-1, args.number_samples_per_prompt).mean(dim=-1)
-                mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(args.number_samples_per_prompt, dim=0)
-                std_grouped_rewards = scores.view(-1, args.number_samples_per_prompt).std(dim=-1)
-                std_grouped_rewards = std_grouped_rewards.repeat_interleave(args.number_samples_per_prompt, dim=0)
-                advantages = (scores - mean_grouped_rewards) / (std_grouped_rewards + 1e-8)
+                mean_grouped_rewards = scores.view(
+                    -1, args.number_samples_per_prompt
+                ).mean(dim=-1)
+                mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(
+                    args.number_samples_per_prompt, dim=0
+                )
+                std_grouped_rewards = scores.view(
+                    -1, args.number_samples_per_prompt
+                ).std(dim=-1)
+                std_grouped_rewards = std_grouped_rewards.repeat_interleave(
+                    args.number_samples_per_prompt, dim=0
+                )
+                advantages = (scores - mean_grouped_rewards) / (
+                    std_grouped_rewards + 1e-8
+                )
 
                 # for logging
                 reward_mean = mean_grouped_rewards
@@ -1208,19 +1411,29 @@ class PolicyTrainerRayProcess(RayProcess):
             # print('training starts')
             # Do multiple epochs of training on on-policy data (PPO-style), with a fresh random shuffle in each epoch
             for epoch_idx in range(args.num_epochs):
-                b_inds = np.random.permutation(args.local_rollout_batch_size * args.number_samples_per_prompt)
+                b_inds = np.random.permutation(
+                    args.local_rollout_batch_size * args.number_samples_per_prompt
+                )
                 minibatch_idx = 0
                 for mini_batch_start in range(
-                    0, args.local_rollout_batch_size * args.number_samples_per_prompt, args.local_mini_batch_size
+                    0,
+                    args.local_rollout_batch_size * args.number_samples_per_prompt,
+                    args.local_mini_batch_size,
                 ):
                     mini_batch_end = mini_batch_start + args.local_mini_batch_size
                     mini_batch_inds = b_inds[mini_batch_start:mini_batch_end]
                     gradient_accumulation_idx = 0
                     # NOTE: deepspeed handles gradient accumulation automatically; see https://github.com/microsoft/DeepSpeed/issues/758#issuecomment-801580724
-                    for micro_batch_start in range(0, args.local_mini_batch_size, args.per_device_train_batch_size):
+                    for micro_batch_start in range(
+                        0, args.local_mini_batch_size, args.per_device_train_batch_size
+                    ):
                         # print("micro batch start", micro_batch_start, self.rank)
-                        micro_batch_end = micro_batch_start + args.per_device_train_batch_size
-                        micro_batch_inds = mini_batch_inds[micro_batch_start:micro_batch_end]
+                        micro_batch_end = (
+                            micro_batch_start + args.per_device_train_batch_size
+                        )
+                        micro_batch_inds = mini_batch_inds[
+                            micro_batch_start:micro_batch_end
+                        ]
                         mb_advantage = advantages[micro_batch_inds]
                         mb_responses = responses[micro_batch_inds]
                         mb_query_responses = query_responses[micro_batch_inds]
@@ -1228,11 +1441,19 @@ class PolicyTrainerRayProcess(RayProcess):
                         mb_reflogprobs = ref_logprobs[micro_batch_inds]
 
                         new_logprobs = self.forward(
-                            mb_query_responses, mb_responses, tokenizer.pad_token_id, context_length, args.temperature
+                            mb_query_responses,
+                            mb_responses,
+                            tokenizer.pad_token_id,
+                            context_length,
+                            args.temperature,
                         )
                         # if self.rank==0:
                         #     print(f"{new_logprobs[0][:40]=}, {mb_logprobs[0][:40]=}")
-                        new_logprobs = torch.masked_fill(new_logprobs, padding_mask[micro_batch_inds], INVALID_LOGPROB)
+                        new_logprobs = torch.masked_fill(
+                            new_logprobs,
+                            padding_mask[micro_batch_inds],
+                            INVALID_LOGPROB,
+                        )
                         logprobs_diff = new_logprobs - mb_logprobs
                         ratio = torch.exp(logprobs_diff)
                         pg_losses = -mb_advantage[:, None] * ratio
@@ -1244,10 +1465,14 @@ class PolicyTrainerRayProcess(RayProcess):
                         # Here we recalculate kl: we want the KL loss to backpropagate through the model
                         # We also clamp the KL loss to avoid numerical instability
                         # https://chatgpt.com/share/679d0ed9-8f48-8011-926e-e274b15ae8ae
-                        ref_logprobs_diff = (new_logprobs - mb_reflogprobs).clamp(-40.0, 40.0)
+                        ref_logprobs_diff = (new_logprobs - mb_reflogprobs).clamp(
+                            -40.0, 40.0
+                        )
                         kl1 = ref_logprobs_diff
                         kl2 = (ref_logprobs_diff) ** 2 / 2
-                        kl3 = torch.expm1(-ref_logprobs_diff) + ref_logprobs_diff  # this is more numerically stable
+                        kl3 = (
+                            torch.expm1(-ref_logprobs_diff) + ref_logprobs_diff
+                        )  # this is more numerically stable
                         kl4 = ratio * ref_logprobs_diff
                         if args.kl_estimator == "kl1":
                             kl = kl1
@@ -1258,7 +1483,10 @@ class PolicyTrainerRayProcess(RayProcess):
                         elif args.kl_estimator == "kl4":
                             kl = kl4
                         # grpo change: directly subtract KL in loss (add)
-                        loss = masked_mean(pg_loss_max + (args.beta * kl), ~padding_mask[micro_batch_inds])
+                        loss = masked_mean(
+                            pg_loss_max + (args.beta * kl),
+                            ~padding_mask[micro_batch_inds],
+                        )
                         self.model.backward(loss)
                         # print("backward loss", self.rank, "micro batch start", micro_batch_start)
                         # print("trying to step", self.rank, "micro batch start", micro_batch_start)
@@ -1273,25 +1501,36 @@ class PolicyTrainerRayProcess(RayProcess):
                             # print("waiting for value model step", self.rank, "micro batch start", micro_batch_start)
                             # vf_loss, vf_clipfrac = ray.get(value_model_step_future)
                             pg_clipfrac = masked_mean(
-                                (pg_losses2 > pg_losses).float(), ~padding_mask[micro_batch_inds]
+                                (pg_losses2 > pg_losses).float(),
+                                ~padding_mask[micro_batch_inds],
                             )
                             # print("value model stepped", self.rank, "micro batch start", micro_batch_start)
                             # prob_dist = torch.nn.functional.softmax(logits, dim=-1)
                             # entropy = torch.logsumexp(logits, dim=-1) - torch.sum(prob_dist * logits, dim=-1)
                             non_score_reward = -args.beta * kl
-                            non_score_reward_sum_stats[epoch_idx, minibatch_idx, gradient_accumulation_idx] = (
-                                non_score_reward.sum(1).mean()
-                            )
+                            non_score_reward_sum_stats[
+                                epoch_idx, minibatch_idx, gradient_accumulation_idx
+                            ] = non_score_reward.sum(1).mean()
                             # print("step finished", self.rank, "micro batch start", micro_batch_start)
                             approxkl = 0.5 * (logprobs_diff**2).mean()
-                            approxkl_stats[epoch_idx, minibatch_idx, gradient_accumulation_idx] = approxkl
-                            pg_clipfrac_stats[epoch_idx, minibatch_idx, gradient_accumulation_idx] = pg_clipfrac
-                            pg_loss_stats[epoch_idx, minibatch_idx, gradient_accumulation_idx] = masked_mean(
+                            approxkl_stats[
+                                epoch_idx, minibatch_idx, gradient_accumulation_idx
+                            ] = approxkl
+                            pg_clipfrac_stats[
+                                epoch_idx, minibatch_idx, gradient_accumulation_idx
+                            ] = pg_clipfrac
+                            pg_loss_stats[
+                                epoch_idx, minibatch_idx, gradient_accumulation_idx
+                            ] = masked_mean(
                                 pg_loss_max, ~padding_mask[micro_batch_inds]
                             )
-                            loss_stats[epoch_idx, minibatch_idx, gradient_accumulation_idx] = loss
+                            loss_stats[
+                                epoch_idx, minibatch_idx, gradient_accumulation_idx
+                            ] = loss
                             # entropy_stats[epoch_idx, minibatch_idx, gradient_accumulation_idx] = entropy.mean()
-                            ratio_stats[epoch_idx, minibatch_idx, gradient_accumulation_idx] = ratio.mean()
+                            ratio_stats[
+                                epoch_idx, minibatch_idx, gradient_accumulation_idx
+                            ] = ratio.mean()
                         gradient_accumulation_idx += 1
                     minibatch_idx += 1
                     # fmt: off
@@ -1303,21 +1542,37 @@ class PolicyTrainerRayProcess(RayProcess):
                 del b_inds, mini_batch_inds
             # print("start metrics")
             with torch.no_grad():
-                local_metrics.add("val/sequence_lengths", sequence_lengths.float().mean())
-                local_metrics.add("val/sequence_lengths_min", sequence_lengths.float().min())
-                local_metrics.add("val/sequence_lengths_max", sequence_lengths.float().max())
-                local_metrics.add("val/num_stop_token_ids", (responses == args.stop_token_id).sum().float().mean())
+                local_metrics.add(
+                    "val/sequence_lengths", sequence_lengths.float().mean()
+                )
+                local_metrics.add(
+                    "val/sequence_lengths_min", sequence_lengths.float().min()
+                )
+                local_metrics.add(
+                    "val/sequence_lengths_max", sequence_lengths.float().max()
+                )
+                local_metrics.add(
+                    "val/num_stop_token_ids",
+                    (responses == args.stop_token_id).sum().float().mean(),
+                )
                 local_metrics.add("objective/kl", kl1_stats.mean())
                 local_metrics.add("objective/kl2", kl2_stats.mean())
                 local_metrics.add("objective/kl3", kl3_stats.mean())
                 local_metrics.add("objective/kl4", kl4_stats.mean())
                 local_metrics.add("objective/entropy", (-logprobs).sum(1).mean())
-                local_metrics.add("objective/non_score_reward", non_score_reward_sum_stats.mean())
-                local_metrics.add("objective/rlhf_reward", scores.mean() + non_score_reward_sum_stats.mean())
+                local_metrics.add(
+                    "objective/non_score_reward", non_score_reward_sum_stats.mean()
+                )
+                local_metrics.add(
+                    "objective/rlhf_reward",
+                    scores.mean() + non_score_reward_sum_stats.mean(),
+                )
                 local_metrics.add("objective/scores", scores.mean())
                 local_metrics.add("objective/scores_mean", reward_mean.mean())
                 local_metrics.add("objective/reward_std", reward_std.mean())
-                local_metrics.add("objective/verifiable_correct_rate", verifiable_correct_rate)
+                local_metrics.add(
+                    "objective/verifiable_correct_rate", verifiable_correct_rate
+                )
                 local_metrics.add("loss/policy_avg", pg_loss_stats.mean())
                 local_metrics.add("loss/policy_avg", loss_stats.mean())
                 local_metrics.add("policy/approxkl_avg", approxkl_stats.mean())
@@ -1325,7 +1580,9 @@ class PolicyTrainerRayProcess(RayProcess):
                 local_metrics.add("policy/entropy_avg", entropy_stats.mean())
                 local_metrics.add("val/ratio", ratio_stats.mean())
                 local_metrics.add("val/ratio_var", ratio_stats.var())
-                local_metrics.add("val/stop_token_rate", contain_stop_token.float().mean())
+                local_metrics.add(
+                    "val/stop_token_rate", contain_stop_token.float().mean()
+                )
                 if args.add_r1_style_format_reward:
                     local_metrics.add("val/format_scores", format_scores.float().mean())
 
@@ -1341,7 +1598,15 @@ class PolicyTrainerRayProcess(RayProcess):
                 if accelerator.is_main_process:
                     print_rich_single_line_metrics(metrics)
                     metrics_queue.put((metrics, episode, df))
-            del (queries, responses, postprocessed_responses, logprobs, ref_logprobs, sequence_lengths, scores)
+            del (
+                queries,
+                responses,
+                postprocessed_responses,
+                logprobs,
+                ref_logprobs,
+                sequence_lengths,
+                scores,
+            )
             del (metrics, kl)
             gc.collect()
             torch.cuda.empty_cache()
@@ -1387,7 +1652,9 @@ class PolicyTrainerRayProcess(RayProcess):
         for k, v in model_to_save.named_parameters():
             # only gather z3 params
             params_to_fetch = _z3_params_to_fetch([v])
-            with deepspeed.zero.GatheredParameters(params_to_fetch, enabled=len(params_to_fetch) > 0):
+            with deepspeed.zero.GatheredParameters(
+                params_to_fetch, enabled=len(params_to_fetch) > 0
+            ):
                 vv = v.data.cpu()
                 if self.rank == 0:
                     output_state_dict[k] = vv
@@ -1406,7 +1673,10 @@ class PolicyTrainerRayProcess(RayProcess):
             output_state_dict_keys = set(output_state_dict.keys())
 
             # corner case for tie_word_embeddings, such as Qwen2-0.5B
-            if getattr(model_to_save.config, "tie_word_embeddings", False) and "lm_head.weight" in state_dict_keys:
+            if (
+                getattr(model_to_save.config, "tie_word_embeddings", False)
+                and "lm_head.weight" in state_dict_keys
+            ):
                 state_dict_keys.remove("lm_head.weight")
 
             assert state_dict_keys.issubset(
@@ -1428,7 +1698,9 @@ class PolicyTrainerRayProcess(RayProcess):
             # save tokenizer
             self.original_tokenizer.save_pretrained(output_dir)
 
-    def launch_ai2_evals_on_weka(self, step_dir: str, training_step: Optional[int] = None) -> None:
+    def launch_ai2_evals_on_weka(
+        self, step_dir: str, training_step: Optional[int] = None
+    ) -> None:
         """auto eval the metrics as `f"{args.exp_name}_step_{training_step}"` in our leaderboard"""
         args = self.args
         beaker_config = self.beaker_config
@@ -1457,7 +1729,8 @@ class PolicyTrainerRayProcess(RayProcess):
                     metadata_blob,
                     "metadata.json",
                     args.hf_metadata_dataset,
-                    "results/" + leaderboard_name,  # to match what the auto-evals name as.
+                    "results/"
+                    + leaderboard_name,  # to match what the auto-evals name as.
                 )
 
             command = f"""\
@@ -1481,14 +1754,24 @@ python scripts/submit_eval_jobs.py \
             if args.oe_eval_tasks is not None:
                 command += f" --oe_eval_tasks {','.join(args.oe_eval_tasks)}"
             print(f"Launching eval jobs with command: {command}")
-            process = subprocess.Popen(["bash", "-c", command], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            process = subprocess.Popen(
+                ["bash", "-c", command], stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
             stdout, stderr = process.communicate()
-            print(f"Submit jobs after model training is finished - Stdout:\n{stdout.decode()}")
-            print(f"Submit jobs after model training is finished - Stderr:\n{stderr.decode()}")
-            print(f"Submit jobs after model training is finished - process return code: {process.returncode}")
+            print(
+                f"Submit jobs after model training is finished - Stdout:\n{stdout.decode()}"
+            )
+            print(
+                f"Submit jobs after model training is finished - Stderr:\n{stderr.decode()}"
+            )
+            print(
+                f"Submit jobs after model training is finished - process return code: {process.returncode}"
+            )
 
 
-def kill_ray_cluster_if_a_worker_dies(object_refs: List[Any], stop_event: threading.Event):
+def kill_ray_cluster_if_a_worker_dies(
+    object_refs: List[Any], stop_event: threading.Event
+):
     while True:
         if stop_event.is_set():
             break
@@ -1553,7 +1836,9 @@ class ModelGroup:
             print(f"{rank=}, {world_size=}, {rank=}, {master_addr=}, {master_port=}")
             scheduling_strategy = PlacementGroupSchedulingStrategy(
                 placement_group=self.pg,
-                placement_group_bundle_index=get_bundle_index(rank, self.num_gpus_per_node),
+                placement_group_bundle_index=get_bundle_index(
+                    rank, self.num_gpus_per_node
+                ),
             )
             worker_policy = ray_process_cls.options(
                 num_cpus=self.num_cpus_per_actor,
@@ -1589,14 +1874,19 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
     writer = SummaryWriter(f"runs/{args.run_name}")
     writer.add_text(
         "hyperparameters",
-        "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
+        "|param|value|\n|-|-|\n%s"
+        % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
     )
 
     tokenizer_revision = (
-        model_config.model_revision if model_config.tokenizer_revision is None else model_config.tokenizer_revision
+        model_config.model_revision
+        if model_config.tokenizer_revision is None
+        else model_config.tokenizer_revision
     )
     tokenizer_name = (
-        model_config.tokenizer_name if model_config.tokenizer_name is not None else model_config.model_name_or_path
+        model_config.tokenizer_name
+        if model_config.tokenizer_name is not None
+        else model_config.model_name_or_path
     )
     if tokenizer_revision != model_config.model_revision:
         # Warn user if tokenizer and model use different revisions; this is an unusual
@@ -1635,7 +1925,9 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
     if args.cache_dataset_only:
         return
 
-    data_collator = SimpleGenerateCollatorWithGroundTruth(pad_token_id=tokenizer.pad_token_id)
+    data_collator = SimpleGenerateCollatorWithGroundTruth(
+        pad_token_id=tokenizer.pad_token_id
+    )
 
     # some more runtime logging
     pprint([args, dataset_config, model_config])
@@ -1643,7 +1935,10 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
 
     # create the model and optimizer
     pg = None
-    bundles = [{"GPU": actor_num_gpus, "CPU": actor_num_gpus * 10} for actor_num_gpus in args.actor_num_gpus_per_node]
+    bundles = [
+        {"GPU": actor_num_gpus, "CPU": actor_num_gpus * 10}
+        for actor_num_gpus in args.actor_num_gpus_per_node
+    ]
     pg = placement_group(bundles, strategy="STRICT_SPREAD")
     ray.get(pg.ready())
 
@@ -1656,7 +1951,8 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
     )
     wandb_url = wandb.run.get_url() if args.with_tracking else None
     inits.extend(
-        model.from_pretrained.remote(args, model_config, beaker_config, wandb_url) for model in policy_group.models
+        model.from_pretrained.remote(args, model_config, beaker_config, wandb_url)
+        for model in policy_group.models
     )
     max_len = dataset_config.max_prompt_token_length + args.response_length
     vllm_engines = create_vllm_engines(
@@ -1703,7 +1999,9 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
     # somtimes a worker dies due to CUDA issues, but the rest of the cluster would just hang
     # so we need kill the ray cluster when this happens.
     stop_event = threading.Event()
-    threading.Thread(target=kill_ray_cluster_if_a_worker_dies, args=(refs, stop_event)).start()
+    threading.Thread(
+        target=kill_ray_cluster_if_a_worker_dies, args=(refs, stop_event)
+    ).start()
 
     # train and gather metrics
     resume_training_step = 1
@@ -1743,10 +2041,14 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
                 metadata_blob,
                 "metadata.json",
                 args.hf_metadata_dataset,
-                "results/" + args.hf_repo_revision,  # to match what the auto-evals name as.
+                "results/"
+                + args.hf_repo_revision,  # to match what the auto-evals name as.
             )
 
-        if args.try_launch_beaker_eval_jobs and len(beaker_config.beaker_dataset_id_urls) > 0:
+        if (
+            args.try_launch_beaker_eval_jobs
+            and len(beaker_config.beaker_dataset_id_urls) > 0
+        ):
             command = f"""\
             python mason.py  \
                 --cluster ai2/allennlp-cirrascale ai2/general-cirrascale-a5000 ai2/general-cirrascale-a5000 ai2/s2-cirrascale ai2/general-cirrascale \
@@ -1761,11 +2063,19 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
                 --upload_to_hf {args.hf_metadata_dataset} \
                 --model_name {args.hf_repo_revision}
             """
-            process = subprocess.Popen(["bash", "-c", command], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            process = subprocess.Popen(
+                ["bash", "-c", command], stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
             stdout, stderr = process.communicate()
-            print(f"Submit jobs after model training is finished - Stdout:\n{stdout.decode()}")
-            print(f"Submit jobs after model training is finished - Stderr:\n{stderr.decode()}")
-            print(f"Submit jobs after model training is finished - process return code: {process.returncode}")
+            print(
+                f"Submit jobs after model training is finished - Stdout:\n{stdout.decode()}"
+            )
+            print(
+                f"Submit jobs after model training is finished - Stderr:\n{stderr.decode()}"
+            )
+            print(
+                f"Submit jobs after model training is finished - process return code: {process.returncode}"
+            )
 
     accelerator = Namespace()
     accelerator.is_main_process = True  # hack
@@ -1780,7 +2090,9 @@ def main(args: Args, dataset_config: DatasetConfig, model_config: ModelConfig):
 
     # The `checkpoint_output_dir` is only used in case of preemption and should be deleted if the run was successful.
     # We use `--save_freq` to save intermediate checkpoints in the output folder instead.
-    if args.checkpoint_output_dir is not None and os.path.exists(args.checkpoint_output_dir):
+    if args.checkpoint_output_dir is not None and os.path.exists(
+        args.checkpoint_output_dir
+    ):
         shutil.rmtree(args.checkpoint_output_dir, ignore_errors=True)
 
 

@@ -2,9 +2,9 @@
 Mix together all datasets to create instruction tuning mix.
 """
 
-from pathlib import Path
 import json
 import os
+from pathlib import Path
 
 
 def write_jsonl(xs, fname):
@@ -24,12 +24,14 @@ names = [
     "scifact_json",
     "scitldr_aic",
     "scierc_ner",
-    "scierc_relation"
+    "scierc_relation",
 ]
 
 # This is an instruction dataset about several science tasks that David and some other collaborators created.
 # Please contact us if you want to use the raw files
-data_dir = Path("../../davidw/proj/science-instruct/promptsource-sciit/prompts_davidw/tasks")
+data_dir = Path(
+    "../../davidw/proj/science-instruct/promptsource-sciit/prompts_davidw/tasks"
+)
 out_dir = Path("data/raw_train/science")
 os.makedirs(out_dir, exist_ok=True)
 

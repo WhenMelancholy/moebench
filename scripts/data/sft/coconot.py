@@ -2,10 +2,10 @@ import argparse
 import os
 from collections import defaultdict
 from typing import List, Optional
+
 from datasets import load_dataset
 
 from scripts.data.sft.utils import convert_sft_dataset
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -52,7 +52,7 @@ if __name__ == "__main__":
     conversion_func = lambda example: {
         "messages": [
             {"role": "user", "content": example["prompt"]},
-            {"role": "assistant", "content": example["response"]}
+            {"role": "assistant", "content": example["response"]},
         ]
     }
 
@@ -70,7 +70,7 @@ if __name__ == "__main__":
         "Please refer to the [original dataset](https://huggingface.co/datasets/allenai/coconot) "
         "for more information about this dataset and the license."
     )
-    
+
     ds = load_dataset("allenai/coconot", "original")
     convert_sft_dataset(
         ds=ds,

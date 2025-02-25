@@ -67,9 +67,14 @@ def dpo_loss(
 
     logits = pi_logratios - ref_logratios
 
-    losses = -F.logsigmoid(beta * logits) * (1 - label_smoothing) - F.logsigmoid(-beta * logits) * label_smoothing
+    losses = (
+        -F.logsigmoid(beta * logits) * (1 - label_smoothing)
+        - F.logsigmoid(-beta * logits) * label_smoothing
+    )
     chosen_rewards = beta * (policy_chosen_logps - reference_chosen_logps).detach()
-    rejected_rewards = beta * (policy_rejected_logps - reference_rejected_logps).detach()
+    rejected_rewards = (
+        beta * (policy_rejected_logps - reference_rejected_logps).detach()
+    )
 
     return losses, chosen_rewards, rejected_rewards
 
@@ -88,9 +93,15 @@ def wpo_loss(
     ref_logratios = reference_chosen_logps - reference_rejected_logps
 
     # compute average logps and use them to compute the weights
-    policy_chosen_logps_average = (policy_chosen_logps * chosen_loss_mask).sum(-1) / chosen_loss_mask.sum(-1)
-    policy_rejected_logps_average = (policy_rejected_logps * rejected_loss_mask).sum(-1) / rejected_loss_mask.sum(-1)
-    policy_weights = torch.clamp(torch.exp(policy_chosen_logps_average + policy_rejected_logps_average), max=1)
+    policy_chosen_logps_average = (policy_chosen_logps * chosen_loss_mask).sum(
+        -1
+    ) / chosen_loss_mask.sum(-1)
+    policy_rejected_logps_average = (policy_rejected_logps * rejected_loss_mask).sum(
+        -1
+    ) / rejected_loss_mask.sum(-1)
+    policy_weights = torch.clamp(
+        torch.exp(policy_chosen_logps_average + policy_rejected_logps_average), max=1
+    )
 
     logits = pi_logratios - ref_logratios
 
@@ -100,7 +111,9 @@ def wpo_loss(
     )
 
     chosen_rewards = beta * (policy_chosen_logps - reference_chosen_logps).detach()
-    rejected_rewards = beta * (policy_rejected_logps - reference_rejected_logps).detach()
+    rejected_rewards = (
+        beta * (policy_rejected_logps - reference_rejected_logps).detach()
+    )
 
     return losses, chosen_rewards, rejected_rewards
 
@@ -128,7 +141,10 @@ def simpo_loss(
     logits = pi_logratios - gamma_beta_ratio
 
     # sigmoid loss type from SimPO.
-    losses = -F.logsigmoid(beta * logits) * (1 - label_smoothing) - F.logsigmoid(-beta * logits) * label_smoothing
+    losses = (
+        -F.logsigmoid(beta * logits) * (1 - label_smoothing)
+        - F.logsigmoid(-beta * logits) * label_smoothing
+    )
 
     chosen_rewards = beta * policy_chosen_logps.detach()
     rejected_rewards = beta * policy_rejected_logps.detach()
@@ -162,7 +178,9 @@ def _get_batch_logps(
     # dummy token; we'll ignore the losses on these tokens later
     labels[labels == -100] = 0
 
-    per_token_logps = torch.gather(logits.log_softmax(-1), dim=2, index=labels.unsqueeze(2)).squeeze(2)
+    per_token_logps = torch.gather(
+        logits.log_softmax(-1), dim=2, index=labels.unsqueeze(2)
+    ).squeeze(2)
 
     if average_log_prob:
         return (per_token_logps * loss_mask).sum(-1) / loss_mask.sum(-1)
@@ -191,7 +209,9 @@ def process_batch(
     return processed
 
 
-def concatenated_inputs(batch: Dict[str, Union[List, torch.LongTensor]]) -> Dict[str, torch.LongTensor]:
+def concatenated_inputs(
+    batch: Dict[str, Union[List, torch.LongTensor]]
+) -> Dict[str, torch.LongTensor]:
     """Concatenate the chosen and rejected inputs into a single tensor.
 
     Args:
@@ -201,13 +221,17 @@ def concatenated_inputs(batch: Dict[str, Union[List, torch.LongTensor]]) -> Dict
     Returns:
         A dictionary containing the concatenated inputs under the key 'concatenated_input_ids'.
     """
-    max_length = max(batch["chosen_input_ids"].shape[1], batch["rejected_input_ids"].shape[1])
+    max_length = max(
+        batch["chosen_input_ids"].shape[1], batch["rejected_input_ids"].shape[1]
+    )
     concatenated_batch = {}
     for k in batch:
         if k.startswith("chosen") and isinstance(batch[k], torch.Tensor):
             pad_value = -100 if "labels" in k else 0
             concatenated_key = k.replace("chosen", "concatenated")
-            concatenated_batch[concatenated_key] = pad_to_length(batch[k], max_length, pad_value=pad_value)
+            concatenated_batch[concatenated_key] = pad_to_length(
+                batch[k], max_length, pad_value=pad_value
+            )
     for k in batch:
         if k.startswith("rejected") and isinstance(batch[k], torch.Tensor):
             pad_value = -100 if "labels" in k else 0
@@ -247,7 +271,11 @@ def concatenated_forward(
             attention_mask=concatenated_batch["concatenated_attention_mask"],
         ).logits.to(torch.float32)
         aux_loss = None
-    all_logps = _get_batch_logps(logits, concatenated_batch["concatenated_labels"], average_log_prob=average_log_prob)
+    all_logps = _get_batch_logps(
+        logits,
+        concatenated_batch["concatenated_labels"],
+        average_log_prob=average_log_prob,
+    )
     chosen_logps = all_logps[: batch["chosen_input_ids"].shape[0]]
     rejected_logps = all_logps[batch["chosen_input_ids"].shape[0] :]
     return chosen_logps, rejected_logps, aux_loss
@@ -283,11 +311,14 @@ def separate_forward(
         aux_loss = chosen_outputs.aux_loss
     else:
         chosen_logits = model(
-            input_ids=chosen_batch["input_ids"], attention_mask=chosen_batch["attention_mask"]
+            input_ids=chosen_batch["input_ids"],
+            attention_mask=chosen_batch["attention_mask"],
         ).logits.to(torch.float32)
         aux_loss = None
 
-    chosen_logps = _get_batch_logps(chosen_logits, chosen_batch["labels"], average_log_prob=average_log_prob)
+    chosen_logps = _get_batch_logps(
+        chosen_logits, chosen_batch["labels"], average_log_prob=average_log_prob
+    )
     del chosen_batch, chosen_logits
     if output_router_logits:
         del chosen_outputs
@@ -306,29 +337,41 @@ def separate_forward(
         aux_loss = rejected_outputs.aux_loss
     else:
         rejected_logits = model(
-            input_ids=rejected_batch["input_ids"], attention_mask=rejected_batch["attention_mask"]
+            input_ids=rejected_batch["input_ids"],
+            attention_mask=rejected_batch["attention_mask"],
         ).logits.to(torch.float32)
         aux_loss = None
 
-    rejected_logps = _get_batch_logps(rejected_logits, rejected_batch["labels"], average_log_prob=average_log_prob)
+    rejected_logps = _get_batch_logps(
+        rejected_logits, rejected_batch["labels"], average_log_prob=average_log_prob
+    )
     del rejected_batch, rejected_logits
     if output_router_logits:
         del rejected_outputs
     torch.cuda.empty_cache()
     if output_router_logits:
-        aux_loss = torch.cat([chosen_outputs.aux_loss, rejected_outputs.aux_loss], dim=0)
+        aux_loss = torch.cat(
+            [chosen_outputs.aux_loss, rejected_outputs.aux_loss], dim=0
+        )
 
     return chosen_logps, rejected_logps, aux_loss
 
 
-def pad_to_length(tensor: torch.Tensor, length: int, pad_value: Union[int, float], dim: int = -1) -> torch.Tensor:
+def pad_to_length(
+    tensor: torch.Tensor, length: int, pad_value: Union[int, float], dim: int = -1
+) -> torch.Tensor:
     if tensor.size(dim) >= length:
         return tensor
     else:
         pad_size = list(tensor.shape)
         pad_size[dim] = length - tensor.size(dim)
         return torch.cat(
-            [tensor, pad_value * torch.ones(*pad_size, dtype=tensor.dtype, device=tensor.device)], dim=dim
+            [
+                tensor,
+                pad_value
+                * torch.ones(*pad_size, dtype=tensor.dtype, device=tensor.device),
+            ],
+            dim=dim,
         )
 
 
@@ -342,10 +385,21 @@ class DataCollatorForSeq2SeqDPO(DataCollatorForSeq2Seq):
     def __call__(self, features, return_tensors=None):
         # call the original collator on chosen and rejected separately, then combine
         def filter_batch(match_string, features):
-            return [{k.replace(match_string, ""): v for k, v in f.items() if match_string in k} for f in features]
+            return [
+                {
+                    k.replace(match_string, ""): v
+                    for k, v in f.items()
+                    if match_string in k
+                }
+                for f in features
+            ]
 
-        chosen_features = super().__call__(filter_batch("chosen_", features), return_tensors=return_tensors)
-        rejected_features = super().__call__(filter_batch("rejected_", features), return_tensors=return_tensors)
+        chosen_features = super().__call__(
+            filter_batch("chosen_", features), return_tensors=return_tensors
+        )
+        rejected_features = super().__call__(
+            filter_batch("rejected_", features), return_tensors=return_tensors
+        )
         result = {}
         for k in chosen_features:
             result["chosen_" + k] = chosen_features[k]

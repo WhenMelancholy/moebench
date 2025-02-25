@@ -30,13 +30,17 @@ def main(args: Args, beaker_runtime_config: BeakerRuntimeConfig):
     print(args)
 
     start_time = time.time()
-    while time.time() - start_time < args.max_wait_time_for_beaker_dataset_upload_seconds:
+    while (
+        time.time() - start_time < args.max_wait_time_for_beaker_dataset_upload_seconds
+    ):
         if beaker_experiment_succeeded(beaker_runtime_config.beaker_workload_id):
             print("Experiment succeeded")
             # NOTE: we are assuming the first beaker dataset has the model
             # I have checked a couple of beaker jobs and found the first dataset is the model
             # but we should check this assumption
-            beaker_dataset_ids = get_beaker_dataset_ids(beaker_runtime_config.beaker_workload_id, sort=True)
+            beaker_dataset_ids = get_beaker_dataset_ids(
+                beaker_runtime_config.beaker_workload_id, sort=True
+            )
             command = f"""
             python scripts/submit_eval_jobs.py \
                 --model_name {args.model_name} \
@@ -53,14 +57,15 @@ def main(args: Args, beaker_runtime_config: BeakerRuntimeConfig):
             if args.run_id:
                 command += f" --run_id {args.run_id}"
 
-            process = subprocess.Popen(["bash", "-c", command], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            process = subprocess.Popen(
+                ["bash", "-c", command], stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
             stdout, stderr = process.communicate()
 
             print(f"Beaker evaluation jobs: Stdout:\n{stdout.decode()}")
             print(f"Beaker evaluation jobs: Stderr:\n{stderr.decode()}")
             print(f"Beaker evaluation jobs: process return code: {process.returncode}")
-            
-            
+
             return
         time.sleep(args.check_interval_seconds)
     # If we reach here, the experiment failed

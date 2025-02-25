@@ -5,7 +5,6 @@ from typing import List, Optional
 
 from scripts.data.sft.utils import convert_sft_dataset
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Process MetaMathQA dataset and optionally upload to Hugging Face Hub."
@@ -47,12 +46,12 @@ if __name__ == "__main__":
         help="Apply empty message filters to the dataset.",
     )
     args = parser.parse_args()
-    
+
     def conversion_func(example):
         # the original dataset already has the `messages` key
         # our code here is mainly for keyword filtering
         return example
-    
+
     cot_subset_readme_content = (
         "This is a converted version of the NuminaMath-CoT subset into Tulu SFT training format.\n\n"
         "The conversion script can be found in our "
@@ -67,7 +66,7 @@ if __name__ == "__main__":
         "Please refer to the [original CoT dataset](https://huggingface.co/datasets/AI-MO/NuminaMath-CoT) "
         "for more information about this dataset and the license."
     )
-    
+
     convert_sft_dataset(
         ds=None,
         hf_dataset_id="AI-MO/NuminaMath-CoT",
@@ -76,12 +75,13 @@ if __name__ == "__main__":
         apply_empty_message_filters=args.apply_empty_message_filters,
         push_to_hub=args.push_to_hub,
         hf_entity=args.hf_entity,
-        converted_dataset_name="numinamath_cot_converted" \
-            if args.converted_dataset_name is None else args.converted_dataset_name + "_cot",
+        converted_dataset_name="numinamath_cot_converted"
+        if args.converted_dataset_name is None
+        else args.converted_dataset_name + "_cot",
         local_save_dir=args.local_save_dir,
         readme_content=cot_subset_readme_content,
     )
-    
+
     tir_subset_readme_content = cot_subset_readme_content.replace("CoT", "TIR")
 
     convert_sft_dataset(
@@ -92,8 +92,9 @@ if __name__ == "__main__":
         apply_empty_message_filters=args.apply_empty_message_filters,
         push_to_hub=args.push_to_hub,
         hf_entity=args.hf_entity,
-        converted_dataset_name="numinamath_tir_converted" \
-            if args.converted_dataset_name is None else args.converted_dataset_name + "_tir",
+        converted_dataset_name="numinamath_tir_converted"
+        if args.converted_dataset_name is None
+        else args.converted_dataset_name + "_tir",
         local_save_dir=args.local_save_dir,
         readme_content=tir_subset_readme_content,
     )

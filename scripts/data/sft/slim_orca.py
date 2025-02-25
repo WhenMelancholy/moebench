@@ -5,7 +5,6 @@ from typing import List, Optional
 
 from scripts.data.sft.utils import convert_sft_dataset
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Process SlimOrca dataset and optionally upload to Hugging Face Hub."
@@ -47,7 +46,7 @@ if __name__ == "__main__":
         help="Apply empty message filters to the dataset.",
     )
     args = parser.parse_args()
-    
+
     def convert_role(role):
         if role == "gpt":
             return "assistant"
@@ -57,13 +56,14 @@ if __name__ == "__main__":
             return "system"
         else:
             raise ValueError(f"Unknown role: {role}")
-    
+
     conversion_func = lambda example: {
         "messages": [
-            {"role": convert_role(it["from"]), "content": it["value"]} for it in example["conversations"]
+            {"role": convert_role(it["from"]), "content": it["value"]}
+            for it in example["conversations"]
         ]
     }
-    
+
     readme_content = (
         "This is a converted version of the SlimOrca dataset into Tulu SFT training format.\n\n"
         "The conversion script can be found in our "
@@ -78,7 +78,7 @@ if __name__ == "__main__":
         "Please refer to the [original dataset](https://huggingface.co/datasets/Open-Orca/SlimOrca) "
         "for more information about this dataset and the license."
     )
-    
+
     convert_sft_dataset(
         ds=None,
         hf_dataset_id="Open-Orca/SlimOrca",
@@ -91,4 +91,3 @@ if __name__ == "__main__":
         local_save_dir=args.local_save_dir,
         readme_content=readme_content,
     )
-    

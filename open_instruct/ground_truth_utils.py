@@ -147,7 +147,9 @@ def verify_flan_sample(model_output, ground_truth_answer):
     return normalize_answer(answer_string) == normalize_answer(ground_truth_answer)
 
 
-def soft_format_reward_func(responses: list[str], reward_scale: float = 1.0) -> list[float]:
+def soft_format_reward_func(
+    responses: list[str], reward_scale: float = 1.0
+) -> list[float]:
     """Reward function that checks if the completion has a specific format."""
     pattern = r".*?</think>\s*<answer>.*?</answer>"
     matches = [re.match(pattern, r, re.DOTALL) for r in responses]

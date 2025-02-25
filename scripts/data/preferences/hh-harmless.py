@@ -28,8 +28,12 @@ def extract(example):
         structured_data = []
         for i in range(len(combined_indices) - 1):
             role_flag = "user" if i % 2 == 0 else "assistant"
-            content_offset_idx = len("\n\nHuman: ") if i % 2 == 0 else len("\n\nAssistant: ")
-            content = example[key][combined_indices[i] + content_offset_idx : combined_indices[i + 1]]
+            content_offset_idx = (
+                len("\n\nHuman: ") if i % 2 == 0 else len("\n\nAssistant: ")
+            )
+            content = example[key][
+                combined_indices[i] + content_offset_idx : combined_indices[i + 1]
+            ]
             structured_data.append({"role": role_flag, "content": content})
         result[key] = structured_data
     result["messages"] = result["chosen"]
@@ -47,7 +51,10 @@ def not_contains_empty(data):
 
 
 def ends_with_assistant(data):
-    return data["chosen"][-1]["role"] == "assistant" and data["rejected"][-1]["role"] == "assistant"
+    return (
+        data["chosen"][-1]["role"] == "assistant"
+        and data["rejected"][-1]["role"] == "assistant"
+    )
 
 
 def filter_fn(data):
@@ -93,8 +100,14 @@ def main(push_to_hub: bool, hf_entity: str | None):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Process HH-RLHF dataset and optionally upload to Hugging Face Hub.")
-    parser.add_argument("--push_to_hub", action="store_true", help="Upload the dataset to Hugging Face Hub")
+    parser = argparse.ArgumentParser(
+        description="Process HH-RLHF dataset and optionally upload to Hugging Face Hub."
+    )
+    parser.add_argument(
+        "--push_to_hub",
+        action="store_true",
+        help="Upload the dataset to Hugging Face Hub",
+    )
     parser.add_argument(
         "--hf_entity",
         type=str,

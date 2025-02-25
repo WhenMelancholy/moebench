@@ -85,14 +85,23 @@ def save_jsonl(save_filename: str, table: Dict[str, List]):
             outfile.write("\n")
 
 
-async def generate_with_openai(model_name: str, data_list: list, args: Args, gen_args: GenerationArgs):
-    config = LLMGenerationConfig(model=model_name, num_completions=gen_args.num_completions)
+async def generate_with_openai(
+    model_name: str, data_list: list, args: Args, gen_args: GenerationArgs
+):
+    config = LLMGenerationConfig(
+        model=model_name, num_completions=gen_args.num_completions
+    )
     processor = LLMProcessor(config)
     results = await processor.process_batch(data_list, args, gen_args)
     return results
 
 
-def generate_with_vllm(model_name_or_path: str, revision: str, prompt_token_ids: List[int], gen_args: GenerationArgs):
+def generate_with_vllm(
+    model_name_or_path: str,
+    revision: str,
+    prompt_token_ids: List[int],
+    gen_args: GenerationArgs,
+):
     llm = LLM(
         model=model_name_or_path,
         revision=revision,
@@ -106,7 +115,9 @@ def generate_with_vllm(model_name_or_path: str, revision: str, prompt_token_ids:
     prompt_token_ids_len = len(prompt_token_ids)
     prompt_token_ids = [item for item in prompt_token_ids if len(item) < max_model_len]
     if len(prompt_token_ids) != prompt_token_ids_len:
-        print(f"Filtered out {prompt_token_ids_len - len(prompt_token_ids)} prompts which exceeds max token length")
+        print(
+            f"Filtered out {prompt_token_ids_len - len(prompt_token_ids)} prompts which exceeds max token length"
+        )
 
     outputs = llm.generate(
         prompt_token_ids=prompt_token_ids,
@@ -160,16 +171,24 @@ def main(args: Args, dataset_config: DatasetConfig, gen_args: GenerationArgs):
             num_proc=NUM_CPUS_FOR_DATASET_MAP,
         )
         messages = dataset["prompt"]
-        responses = asyncio.run(generate_with_openai(args.model_name_or_path, messages, args, gen_args))
+        responses = asyncio.run(
+            generate_with_openai(args.model_name_or_path, messages, args, gen_args)
+        )
         outputs = [{"outputs": [{"text": response} for response in responses]}]
 
     else:
-        tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path, revision=args.revision)
-        dataset_processor = SFTDatasetProcessor(tokenizer=tokenizer, config=dataset_config)
+        tokenizer = AutoTokenizer.from_pretrained(
+            args.model_name_or_path, revision=args.revision
+        )
+        dataset_processor = SFTDatasetProcessor(
+            tokenizer=tokenizer, config=dataset_config
+        )
         dataset = dataset_processor.tokenize(dataset)
         dataset = dataset_processor.filter(dataset)
         prompt_token_ids = dataset[INPUT_IDS_PROMPT_KEY]
-        outputs = generate_with_vllm(args.model_name_or_path, args.revision, prompt_token_ids, gen_args)
+        outputs = generate_with_vllm(
+            args.model_name_or_path, args.revision, prompt_token_ids, gen_args
+        )
 
     # Assuming we generate n=3 completions per prompt; the outputs will look like:
     # prompt | completions
@@ -194,7 +213,9 @@ def main(args: Args, dataset_config: DatasetConfig, gen_args: GenerationArgs):
             table["model_completion"].append(item["text"])
             table["reference_completion"].append(messages[-1]["content"])
 
-    print(f"Number prompts with identical completions: {num_prompt_with_identical_completions}")
+    print(
+        f"Number prompts with identical completions: {num_prompt_with_identical_completions}"
+    )
     save_jsonl(args.save_filename, table)
 
     if args.push_to_hub:

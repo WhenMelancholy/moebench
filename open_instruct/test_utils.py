@@ -58,14 +58,18 @@ class GetDatasetsTest(unittest.TestCase):
             "HuggingFaceH4/testing_alpaca_small": 0.7,
             "HuggingFaceH4/testing_self_instruct_small": -0.3,
         }
-        with pytest.raises(ValueError, match=r"Dataset fractions / lengths cannot be negative."):
+        with pytest.raises(
+            ValueError, match=r"Dataset fractions / lengths cannot be negative."
+        ):
             get_datasets(dataset_mixer, columns_to_keep=["prompt", "completion"])
 
     def test_loading_single_split_with_unit_fractions(self):
         dataset_mixer = {
             "HuggingFaceH4/testing_alpaca_small": 1.0,
         }
-        datasets = get_datasets(dataset_mixer, splits=["test"], columns_to_keep=["prompt", "completion"])
+        datasets = get_datasets(
+            dataset_mixer, splits=["test"], columns_to_keep=["prompt", "completion"]
+        )
         self.assertEqual(len(datasets["test"]), 100)
         self.assertRaises(KeyError, lambda: datasets["train"])
 
@@ -74,7 +78,9 @@ class GetDatasetsTest(unittest.TestCase):
             "ai2-adapt-dev/ultrafeedback-small": 1000,
             "ai2-adapt-dev/summarize_from_feedback_small": 1000,
         }
-        pref_datasets = get_datasets(dataset_mixer, splits=["train"], columns_to_keep=["chosen", "rejected"])
+        pref_datasets = get_datasets(
+            dataset_mixer, splits=["train"], columns_to_keep=["chosen", "rejected"]
+        )
         self.assertEqual(len(pref_datasets["train"]), 2000)
 
     def test_time_parser_used_in_get_beaker_dataset_ids(self):

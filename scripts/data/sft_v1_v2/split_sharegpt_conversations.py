@@ -3,8 +3,9 @@ This script is largely copied from the Vicuna repo: https://github.com/lm-sys/Fa
 We fixed a bug in `split_one_sample`, which previously includes long conversations in the processed data. Now we skip these long conversations.
 """
 import argparse
-from concurrent.futures import ProcessPoolExecutor
 import json
+from concurrent.futures import ProcessPoolExecutor
+
 import transformers
 from tqdm import tqdm
 
@@ -39,7 +40,9 @@ def split_one_sample(sample):
         tmp_len = tokenized_lens[i] + tokenized_lens[i + 1]
         if cur_len + tmp_len > max_length:
             new_samples.append(make_sample(sample, start_idx, i))
-            if tmp_len > max_length:  # if the current conversation is too long, we should skip it
+            if (
+                tmp_len > max_length
+            ):  # if the current conversation is too long, we should skip it
                 start_idx = i + 2
             else:
                 start_idx = i

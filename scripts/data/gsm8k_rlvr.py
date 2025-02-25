@@ -16,10 +16,12 @@ import datasets
 from huggingface_hub import HfApi
 from transformers import HfArgumentParser
 
+
 @dataclass
 class Args:
     push_to_hub: bool = False
     hf_entity: Optional[str] = None
+
 
 def main(args: Args):
     dataset = datasets.load_dataset("gsm8k", "main")
@@ -33,12 +35,13 @@ def main(args: Args):
             {"role": "assistant", "content": example["answer"]},
         ]
         return example
+
     dataset = dataset.map(process)
     for key in dataset:  # reorder columns
         dataset[key] = dataset[key].select_columns(
             ["messages", "ground_truth", "dataset"]
         )
-    
+
     if args.push_to_hub:
         api = HfApi()
         if not args.hf_entity:
@@ -52,6 +55,7 @@ def main(args: Args):
             repo_type="dataset",
             repo_id=repo_id,
         )
+
 
 if __name__ == "__main__":
     parser = HfArgumentParser((Args))

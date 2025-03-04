@@ -58,15 +58,17 @@ accelerate launch \
     --warmup_ratio 0.03 \
     --weight_decay 0.0 \
     --num_train_epochs 2 \
-    --output_dir output/0225_finetune_baseline \
+    --output_dir output/0225_finetune_lima_all \
     --with_tracking \
     --report_to wandb \
     --logging_steps 1 \
     --reduce_loss sum \
     --model_revision main \
-    --dataset_mixer_list allenai/tulu-v3.1-mix-preview-4096-OLMoE 1.0 \
     --checkpointing_steps epoch \
     --no_push_to_hub \
     --no_use_slow_tokenizer \
     --no_try_launch_beaker_eval_jobs \
+    --gradient_checkpointing \
+    --dataset_mixer_list WhenceFade/lima_olmoe 1.0 \
     --add_bos
+# --dataset_mixer_list allenai/tulu-v3.1-mix-preview-4096-OLMoE 1.0 \

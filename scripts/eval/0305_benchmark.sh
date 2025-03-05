@@ -4,8 +4,8 @@
 #SBATCH --gres=gpu:nvidia_h100_80gb_hbm3:1
 #SBATCH -t 1-00:05
 #SBATCH --mem=800G
-#SBATCH -o logs/slurm/%j_%A_%a.out
-#SBATCH -e logs/slurm/%j_%A_%a.err
+#SBATCH -o logs/slurm_benchmark/%j_%A_%a.out
+#SBATCH -e logs/slurm_benchmark/%j_%A_%a.err
 #SBATCH --mail-user=mufan@cs.unc.edu
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --array=1-9
@@ -27,12 +27,12 @@ settings=(
     "none"
     "expert"
     "router"
-    "expert,router"
-    "router,expert"
-    "expert,none"
-    "router,none"
-    "none,expert"
-    "none,router"
+    "expert_router"
+    "router_expert"
+    "expert_none"
+    "router_none"
+    "none_expert"
+    "none_router"
 )
 
 setting=${settings[$SLURM_ARRAY_TASK_ID - 1]}
@@ -53,7 +53,7 @@ CUDA_VISIBLE_DEVICES=0 lm_eval --model hf \
 
 CUDA_VISIBLE_DEVICES=0 lm_eval --model hf \
     --model_args pretrained=./output/0304_lima_${setting},trust_remote_code=True,random_router=True,save_router_logits="output/0304_lima_${setting}/random.pt" \
-    --tasks winogrande,mmlu,piqa,arc_challenge,arc_easy,truthfulqa_mc1,truthfulqa_mc2,truthfulqa_gen,nq_open \
+    --tasks winogrande,mmlu,piqa,arc_challenge,arc_easy \
     --batch_size auto \
     --output_path ./results/random \
     --wandb_args project=lm-eval-olmoe \
@@ -62,7 +62,7 @@ CUDA_VISIBLE_DEVICES=0 lm_eval --model hf \
 
 CUDA_VISIBLE_DEVICES=0 lm_eval --model hf \
     --model_args pretrained=./output/0304_lima_${setting},trust_remote_code=True,random_router=False,save_router_logits="output/0304_lima_${setting}/prune.pt",prune_experts="output/0304_lima_${setting}/baseline.pt" \
-    --tasks winogrande,mmlu,piqa,arc_challenge,arc_easy,truthfulqa_mc1,truthfulqa_mc2,truthfulqa_gen,nq_open \
+    --tasks winogrande,mmlu,piqa,arc_challenge,arc_easy \
     --batch_size auto \
     --output_path ./results/prune \
     --wandb_args project=lm-eval-olmoe \

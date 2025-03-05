@@ -1030,7 +1030,7 @@ class OlmoeModel(OlmoePreTrainedModel):
                 # ipdb.set_trace()
                 new_logits.append(torch.concat(layer_logits, dim=0))
             new_logits = torch.stack(new_logits, dim=0)
-            dir = os.path.basename(os.path.normpath(self.save_router_logits))
+            dir = os.path.dirname(self.save_router_logits)
             os.makedirs(dir, exist_ok=True)
             torch.save(new_logits, self.save_router_logits)
 

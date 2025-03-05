@@ -49,11 +49,12 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
 
 import torch
-import transformers
 from datasets import Dataset, concatenate_datasets, load_dataset
 from huggingface_hub import HfApi, ModelCard, revision_exists
 from rich.console import Console
 from rich.text import Text
+
+import transformers
 from transformers import (
     AutoTokenizer,
     GPTNeoXTokenizerFast,
@@ -400,9 +401,9 @@ class TokenizerConfig:
     revision: str
     trust_remote_code: bool = True
     use_fast: bool = True
-    chat_template_name: Optional[
-        str
-    ] = None  # TODO: should I give an option to force override?
+    chat_template_name: Optional[str] = (
+        None  # TODO: should I give an option to force override?
+    )
     add_bos: bool = False
     get_tokenizer_fn: str = "get_tokenizer_tulu_v2_1"
 

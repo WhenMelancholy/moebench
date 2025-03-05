@@ -28,22 +28,10 @@ from typing import List, Optional, Union
 import datasets
 import deepspeed
 import torch
-import transformers
 from accelerate import Accelerator, DataLoaderConfiguration
 from accelerate.logging import get_logger
 from accelerate.utils import InitProcessGroupKwargs, set_seed
 from huggingface_hub import HfApi
-from peft import LoraConfig, TaskType, get_peft_model, prepare_model_for_kbit_training
-from torch.utils.data import DataLoader
-from tqdm.auto import tqdm
-from transformers import (
-    AutoConfig,
-    AutoModelForCausalLM,
-    BitsAndBytesConfig,
-    DataCollatorForSeq2Seq,
-    get_scheduler,
-)
-
 from open_instruct.dataset_transformation import (
     CHAT_TEMPLATES,
     TokenizerConfig,
@@ -60,6 +48,18 @@ from open_instruct.utils import (
     maybe_use_ai2_hf_entity,
     maybe_use_ai2_wandb_entity,
     upload_metadata_to_hf,
+)
+from peft import LoraConfig, TaskType, get_peft_model, prepare_model_for_kbit_training
+from torch.utils.data import DataLoader
+from tqdm.auto import tqdm
+
+import transformers
+from transformers import (
+    AutoConfig,
+    AutoModelForCausalLM,
+    BitsAndBytesConfig,
+    DataCollatorForSeq2Seq,
+    get_scheduler,
 )
 
 logger = get_logger(__name__)
@@ -403,6 +403,8 @@ class FlatArguments:
     """Whether to launch beaker evaluation jobs after training"""
     hf_metadata_dataset: Optional[str] = "allenai/tulu-3-evals"
     """What dataset to upload the metadata to. If unset, don't upload metadata"""
+    freeze_strategy: Optional[str] = None
+    """MoE Benchmarking setting: whether to freeze the model during finetune or not, supporting interleave freeze strategy"""
 
     def __post_init__(self):
         if self.reduce_loss not in ["mean", "sum"]:
@@ -443,6 +445,13 @@ class FlatArguments:
             raise ValueError(
                 "Cannot launch Beaker evaluation jobs without pushing to the Hub."
             )
+
+        self.freeze_strategy_list = ["none"] * self.num_train_epochs
+        if self.freeze_strategy is not None:
+            freeze_strategy_period = self.freeze_strategy.split(",")
+            period_length = len(freeze_strategy_period)
+            for i in range(self.num_train_epochs):
+                self.freeze_strategy_list[i] = freeze_strategy_period[i % period_length]
 
 
 def main(args: FlatArguments):
@@ -584,9 +593,9 @@ def main(args: FlatArguments):
                 quantization_config=bnb_config,
                 device_map=device_map,
                 torch_dtype=torch.bfloat16,
-                attn_implementation="flash_attention_2"
-                if args.use_flash_attn
-                else "eager",
+                attn_implementation=(
+                    "flash_attention_2" if args.use_flash_attn else "eager"
+                ),
             )
         else:
             model = AutoModelForCausalLM.from_pretrained(
@@ -597,9 +606,9 @@ def main(args: FlatArguments):
                 trust_remote_code=args.trust_remote_code,
                 low_cpu_mem_usage=args.low_cpu_mem_usage,
                 torch_dtype=torch.bfloat16,
-                attn_implementation="flash_attention_2"
-                if args.use_flash_attn
-                else "eager",
+                attn_implementation=(
+                    "flash_attention_2" if args.use_flash_attn else "eager"
+                ),
             )
     else:
         logger.info("Training new model from scratch")
@@ -839,6 +848,24 @@ def main(args: FlatArguments):
             )
         else:
             active_dataloader = train_dataloader
+
+        for name, param in model.named_parameters():
+            param.requires_grad = True
+        freeze_strategy = args.freeze_strategy_list[epoch]
+        if freeze_strategy != "none":
+            if freeze_strategy == "router":
+                for name, param in model.named_parameters():
+                    if ".gate." in name:
+                        param.requires_grad = False
+                        logger.info(f"Freezing {name}")
+            elif freeze_strategy == "expert":
+                for name, param in model.named_parameters():
+                    if ".experts." in name:
+                        param.requires_grad = False
+                        logger.info(f"Freezing {name}")
+            else:
+                raise ValueError(f"Unknown freeze strategy: {freeze_strategy}")
+
         for step, batch in enumerate(active_dataloader):
             local_total_tokens += batch["attention_mask"].sum()
             total_token_including_padding += batch["attention_mask"].numel()

@@ -82,3 +82,12 @@ CUDA_VISIBLE_DEVICES=0 lm_eval --model hf \
     --wandb_args project=lm-eval-olmoe \
     --log_samples \
     --device cuda:0
+
+CUDA_VISIBLE_DEVICES=0 lm_eval --model hf \
+    --model_args pretrained=./output/0225_finetune_lima_all,trust_remote_code=True,save_router_logits="output/logits/prune.pt",prune_experts="output/logits/baseline.pt" \
+    --tasks winogrande,mmlu,piqa,arc_challenge,arc_easy \
+    --batch_size auto \
+    --output_path ./results \
+    --wandb_args project=lm-eval-olmoe \
+    --log_samples \
+    --device cuda:0

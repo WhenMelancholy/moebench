@@ -8,7 +8,6 @@
 #SBATCH -e logs/slurm_benchmark/%j_%A_%a.err
 #SBATCH --mail-user=mufan@cs.unc.edu
 #SBATCH --mail-type=BEGIN,END,FAIL
-#SBATCH --array=1-9
 set -e
 
 [ -z "$SLURM_ARRAY_TASK_ID" ] && SLURM_ARRAY_TASK_ID=1
@@ -23,26 +22,11 @@ export GPUS_PER_MODEL=1
 export MODEL_REPLICAS=4
 export CUDA_VISIBLE_DEVICES=0
 
-settings=(
-    "none"
-    "expert"
-    "router"
-    "expert_router"
-    "router_expert"
-    "expert_none"
-    "router_none"
-    "none_expert"
-    "none_router"
-)
-
-setting=${settings[$SLURM_ARRAY_TASK_ID - 1]}
-echo "Setting: $setting"
-
 mkdir -p results/baseline
 mkdir -p results/random
 mkdir -p results/prune
 
-model_dir=0304_lima_${setting}
+model_dir=OLMoE-1B-7B-0924-SFT
 CUDA_VISIBLE_DEVICES=0 lm_eval --model hf \
     --model_args pretrained=./output/${model_dir},trust_remote_code=True,random_router=False,save_router_logits="output/${model_dir}/baseline.pt" \
     --tasks winogrande,mmlu,piqa,arc_challenge,arc_easy,truthfulqa_mc1,truthfulqa_mc2,truthfulqa_gen,nq_open \

@@ -448,7 +448,7 @@ class FlatArguments:
 
         self.freeze_strategy_list = ["none"] * self.num_train_epochs
         if self.freeze_strategy is not None:
-            freeze_strategy_period = self.freeze_strategy.split(",")
+            freeze_strategy_period = self.freeze_strategy.replace(",", "_").split("_")
             period_length = len(freeze_strategy_period)
             for i in range(self.num_train_epochs):
                 self.freeze_strategy_list[i] = freeze_strategy_period[i % period_length]
@@ -993,6 +993,13 @@ def main(args: FlatArguments):
             if args.output_dir is not None:
                 output_dir = os.path.join(args.output_dir, output_dir)
             accelerator.save_state(output_dir)
+            save_with_accelerate(
+                accelerator,
+                model,
+                tokenizer,
+                output_dir,
+                args.use_lora,
+            )
             # use this to mark the checkpoint as completely saved, to avoid restoring from garbled checkpoints
             with open(
                 os.path.join(
@@ -1018,7 +1025,9 @@ def main(args: FlatArguments):
 
     # remove all checkpoints to save space
     if accelerator.is_local_main_process:
-        clean_last_n_checkpoints(args.output_dir, keep_last_n_checkpoints=0)
+        clean_last_n_checkpoints(
+            args.output_dir, keep_last_n_checkpoints=args.keep_last_n_checkpoints
+        )
 
     if (
         args.try_auto_save_to_beaker

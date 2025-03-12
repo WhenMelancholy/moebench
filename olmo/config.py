@@ -716,7 +716,7 @@ class TokenizerConfig(BaseConfig):
 @dataclass
 class WandbConfig(BaseConfig):
     project: Optional[str] = None
-    entity: Optional[str] = "ai2-llm"
+    entity: Optional[str] = None
     group: Optional[str] = None
     name: Optional[str] = None
     tags: Optional[List[str]] = field(default_factory=lambda: ["watching"])

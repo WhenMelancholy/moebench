@@ -7,10 +7,11 @@
 #SBATCH -o logs/slurm_pretrain/%j_%A_%a.out
 #SBATCH -e logs/slurm_pretrain/%j_%A_%a.err
 #SBATCH --mail-user=mufan@cs.unc.edu
-#SBATCH --mail-type=BEGIN,END,FAIL
+#SBATCH --mail-type=FAIL
 
 set -ex
 
+cd /n/home08/zkong/mufan/tmp/moebench/OLMo/
 CONFIG_PATH=configs/0312-OLMoE-300M.yml
 ARGS='--run_name=0312-OLMoE-300M --save-overwrite --fsdp.sharding_strategy=FULL_SHARD --device_train_microbatch_size=4 --canceled_check_interval=9999999'
 DATE=$(date +%m%d)

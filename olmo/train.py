@@ -1426,6 +1426,12 @@ class Trainer:
                     if self.epoch < self.max_epochs:
                         log.info(f"Reshuffling data loader for epoch {self.epoch}...")
                         self.dataset.reshuffle(self.epoch)
+
+                    log.info(f"Saving unsharded checkpoint for epoch {epoch}...")
+                    checkpoint_path, _ = self.save_checkpoint(CheckpointType.unsharded)
+                    log.info(f"Unsharded checkpoint saved to {checkpoint_path}")
+                    # Reset speed monitor so that we don't count the time taken to save checkpoints.
+                    speed_monitor.reset()
                     continue
 
                 break

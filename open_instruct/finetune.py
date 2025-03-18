@@ -222,6 +222,10 @@ class FlatArguments:
         default=2e-5,
         metadata={"help": "The initial learning rate for AdamW optimizer."},
     )
+    router_learning_rate: float = field(
+        default=2e-5,
+        metadata={"help": "The learning rate for router parameters."},
+    )
     logging_steps: Optional[int] = field(
         default=None,
         metadata={
@@ -667,23 +671,36 @@ def main(args: FlatArguments):
         batch_size=args.per_device_train_batch_size,
     )
 
+    # import debugpy
+    # try:
+    #     debugpy.listen(9501)
+    #     debugpy.wait_for_client()
+    # except Exception as e:
+    #     print(f"Failed to connect to debugger: {e}")
+
     # Optimizer
     # Split weights in two groups, one with weight decay and the other not.
     no_decay = ["bias", "layer_norm.weight"]
     optimizer_grouped_parameters = [
+        # Group for parameters that include "mlp.gate.weight" with a special learning rate
+        {
+            "params": [p for n, p in model.named_parameters() if "mlp.gate.weight" in n],
+            "lr": args.router_learning_rate,
+            "weight_decay": args.weight_decay,
+        },
+        # Group for parameters that do not include "mlp.gate.weight" and should use weight decay
         {
             "params": [
-                p
-                for n, p in model.named_parameters()
-                if not any(nd in n for nd in no_decay)
+                p for n, p in model.named_parameters()
+                if "mlp.gate.weight" not in n and not any(nd in n for nd in no_decay)
             ],
             "weight_decay": args.weight_decay,
         },
+        # Group for parameters that do not include "mlp.gate.weight" and should not use weight decay
         {
             "params": [
-                p
-                for n, p in model.named_parameters()
-                if any(nd in n for nd in no_decay)
+                p for n, p in model.named_parameters()
+                if "mlp.gate.weight" not in n and any(nd in n for nd in no_decay)
             ],
             "weight_decay": 0.0,
         },

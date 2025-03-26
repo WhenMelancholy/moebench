@@ -144,7 +144,7 @@ for i in range(15):
     datasets = ["I-MaliciousInstructions.json", "I-CoNa.json", "I-Controversial.json"]
     row["safety"] = []
     for dataset in datasets:
-        result_path = f"output/0307_lima_none/{os.path.basename(model_dir)}/{dataset}"
+        result_path = f"{model_dir}/{dataset}"
         result = json.load(open(result_path))
         harmfulness = [item["harmfulness"] for item in result]
         llamaguard = [item["llamaguard"] != "safe" for item in result]

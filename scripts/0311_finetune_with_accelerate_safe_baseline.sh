@@ -8,7 +8,7 @@
 #SBATCH -e logs/slurm_sft_lima_safe/%j_%A_%a.err
 #SBATCH --mail-user=mufan@cs.unc.edu
 #SBATCH --mail-type=BEGIN,END,FAIL
-#SBATCH --array=1-9%1
+#SBATCH --dependency=afterok:6286171
 
 set -e
 
@@ -61,12 +61,6 @@ settings=(
     "router_none"
     "none_expert"
     "none_router"
-    "expert_expert_router_router_router"
-    "router_router_expert_expert_expert"
-    "expert_expert_none_none_none"
-    "router_router_none_none_none"
-    "none_none_expert_expert_expert"
-    "none_none_router_router_router"
 )
 setting=${settings[$SLURM_ARRAY_TASK_ID - 1]}
 accelerate launch \

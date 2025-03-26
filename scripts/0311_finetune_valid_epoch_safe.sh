@@ -81,7 +81,7 @@ accelerate launch \
     --warmup_ratio 0.03 \
     --weight_decay 0.0 \
     --num_train_epochs 15 \
-    --output_dir output/${DATE}_lima_safe_${setting} \
+    --output_dir output/${DATE}_lima_safe_epoch \
     --with_tracking \
     --report_to wandb \
     --logging_steps 1 \
@@ -92,8 +92,8 @@ accelerate launch \
     --no_push_to_hub \
     --no_use_slow_tokenizer \
     --no_try_launch_beaker_eval_jobs \
-    --gradient_checkpointing \
     --dataset_mixer_list WhenceFade/lima_safe_olmoe 1.0 \
     --freeze_strategy ${setting} \
     --add_bos
+# --gradient_checkpointing \
 # --dataset_mixer_list allenai/tulu-v3.1-mix-preview-4096-OLMoE 1.0 \

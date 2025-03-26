@@ -793,9 +793,7 @@ class Trainer:
 
         return loss, ce_loss, z_loss
 
-    def train_batch(
-        self, batch: Dict[str, Any]
-    ) -> Tuple[
+    def train_batch(self, batch: Dict[str, Any]) -> Tuple[
         torch.Tensor,
         Optional[torch.Tensor],
         Optional[torch.Tensor],
@@ -972,9 +970,9 @@ class Trainer:
                         metrics[f"train/TokensPercentage/layer{layer_idx}/expert{expert_idx}"] = (
                             expert_assignment.item() / total_tokens
                         ) * 100
-                        metrics[
-                            f"train/TokensTotal/layer{layer_idx}/expert{expert_idx}"
-                        ] = expert_assignment.item()
+                        metrics[f"train/TokensTotal/layer{layer_idx}/expert{expert_idx}"] = (
+                            expert_assignment.item()
+                        )
         if moe_z_batch_loss is not None:
             metrics["train/MoEZLoss"] = moe_z_batch_loss.item()
 
@@ -1309,7 +1307,7 @@ class Trainer:
 
                     # Log metrics to console.
                     if self.global_step % self.cfg.console_log_interval == 0:
-                        if get_global_rank() == 0:
+                        if False and get_global_rank() == 0:
                             self.log_metrics_to_console(
                                 f"[step={self.global_step}/{self.max_steps},epoch={epoch}]",
                                 metrics,

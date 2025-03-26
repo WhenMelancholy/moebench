@@ -13,9 +13,9 @@ set -ex
 
 cd /n/home08/zkong/mufan/tmp/moebench/OLMo/
 
-export CONFIG_NAME=0312-OLMoE-300M
+export CONFIG_NAME=0312-OLMoE-300M-15ep
 CONFIG_PATH=configs/${CONFIG_NAME}.yml
-ARGS='--run_name=${CONFIG_NAME} --save-overwrite --fsdp.sharding_strategy=FULL_SHARD --device_train_microbatch_size=4 --canceled_check_interval=9999999'
+ARGS="--run_name=${CONFIG_NAME} --save-overwrite --fsdp.sharding_strategy=FULL_SHARD --device_train_microbatch_size=4 --canceled_check_interval=9999999"
 DATE=$(date +%m%d)
 
 # export WANDB_API_KEY="dc819d760ed4bb33f5565fd184c37dd03b5b35e4"

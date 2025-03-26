@@ -1,14 +1,11 @@
-from megablocks.layers import common
-from megablocks.layers import mpu
-from megablocks.layers import router
-from megablocks.layers import mlp
-from megablocks.layers import sharedexpert_registry
-from megablocks.layers.all_to_all import all_to_all
-from megablocks.layers.arguments import Arguments
-import megablocks.ops as ops
+import ipdb
 import numpy as np
 import torch
 
+import megablocks.ops as ops
+from megablocks.layers import common, mlp, mpu, router, sharedexpert_registry
+from megablocks.layers.all_to_all import all_to_all
+from megablocks.layers.arguments import Arguments
 
 _LOAD_BALANCING_LOSS = []
 
@@ -28,7 +25,7 @@ def clear_load_balancing_loss():
     _LOAD_BALANCING_LOSS.clear()
 
 
-def batched_load_balancing_loss(args : Arguments):
+def batched_load_balancing_loss(args: Arguments):
     if args.moe_loss_weight == 0:
         return 0.0
 
@@ -36,8 +33,7 @@ def batched_load_balancing_loss(args : Arguments):
     # expert_scores[i].shape = (tokens, num_experts)
     # tokens_per_expert, expert_scores = zip(*get_load_balancing_loss())
     tokens_per_expert, expert_scores, expert_logits = zip(*get_load_balancing_loss())
-    num_layers_per_pipeline_stage = (
-        args.num_layers // args.pipeline_model_parallel_size)
+    num_layers_per_pipeline_stage = args.num_layers // args.pipeline_model_parallel_size
     if args.num_layers_per_virtual_pipeline_stage is not None:
         num_layers_per_pipeline_stage = args.num_layers_per_virtual_pipeline_stage
 
@@ -48,7 +44,8 @@ def batched_load_balancing_loss(args : Arguments):
             f"{args.num_layers}\npipeline_model_parallel_size = "
             f"{args.pipeline_model_parallel_size}\n"
             "num_layers_per_virtual_pipeline_stage"
-            f" = {args.num_layers_per_virtual_pipeline_stage}")
+            f" = {args.num_layers_per_virtual_pipeline_stage}"
+        )
     if len(expert_scores) != num_layers_per_pipeline_stage:
         raise ValueError(
             f"Expected {num_layers_per_pipeline_stage} expert_scores "
@@ -56,20 +53,25 @@ def batched_load_balancing_loss(args : Arguments):
             f"{args.num_layers}\npipeline_model_parallel_size = "
             f"{args.pipeline_model_parallel_size}\n"
             "num_layers_per_virtual_pipeline_stage"
-            f" = {args.num_layers_per_virtual_pipeline_stage}")
+            f" = {args.num_layers_per_virtual_pipeline_stage}"
+        )
 
     # Verify the shape of the tokens_per_expert and expert_scores tensors.
-    assert all([
-        x.ndim == 1 and x.numel() == args.moe_num_experts
-        for x in tokens_per_expert
-    ])
+    assert all(
+        [x.ndim == 1 and x.numel() == args.moe_num_experts for x in tokens_per_expert]
+    )
 
     tokens = expert_scores[0].shape[0]
-    assert all([
-        (x.ndim == 2 and x.shape[1] == args.moe_num_experts and
-         x.shape[0] == tokens) for x in expert_scores
-    ])
-
+    assert all(
+        [
+            (
+                x.ndim == 2
+                and x.shape[1] == args.moe_num_experts
+                and x.shape[0] == tokens
+            )
+            for x in expert_scores
+        ]
+    )
 
     # Concatenate the contributions of each layer and convert to
     # the correct types and formats for the dot product.
@@ -90,18 +92,16 @@ def batched_load_balancing_loss(args : Arguments):
     # Calculate the total scale across all factors.
     #
     # loss_weight * num_experts / (num_layers * tokens * top_k)
-    scale_numerator = (
-        args.moe_num_experts *
-        args.moe_loss_weight
-    )
-    scale_denominator = (
-        args.num_layers *
-        tokens *
-        args.moe_top_k
-    )
+    scale_numerator = args.moe_num_experts * args.moe_loss_weight
+    scale_denominator = args.num_layers * tokens * args.moe_top_k
     scale = scale_numerator / scale_denominator
-    zloss = (torch.log(torch.exp(expert_logits).sum(dim=-1)) ** 2).sum() / scale_denominator
-    return scale * torch.dot(tokens_per_expert, expert_scores), args.moe_zloss_weight * zloss    
+    zloss = (
+        torch.log(torch.exp(expert_logits).sum(dim=-1)) ** 2
+    ).sum() / scale_denominator
+    return (
+        scale * torch.dot(tokens_per_expert, expert_scores),
+        args.moe_zloss_weight * zloss,
+    )
 
 
 # NOTE: This class defines MoE expert computation, including expert model parallel
@@ -110,7 +110,7 @@ def batched_load_balancing_loss(args : Arguments):
 # parallel all2all.
 class ParallelMLP(torch.nn.Module):
 
-    def __init__(self, args : Arguments):
+    def __init__(self, args: Arguments):
         super(ParallelMLP, self).__init__()
         self.args = args
 
@@ -130,13 +130,14 @@ class ParallelMLP(torch.nn.Module):
         if self.args.bias:
             # Note that the output bias is not parallelized with expert
             # model parallelism.
-            self.bias = torch.nn.Parameter(torch.empty(
-                args.hidden_size,
-                device=args.device,
-                dtype=common.dtype(args)))
+            self.bias = torch.nn.Parameter(
+                torch.empty(
+                    args.hidden_size, device=args.device, dtype=common.dtype(args)
+                )
+            )
             torch.nn.init.zeros_(self.bias)
         else:
-            self.register_parameter('bias', None)
+            self.register_parameter("bias", None)
 
         # Select the forward function for the operating mode.
         if self.args.moe_expert_choice_grouped:
@@ -150,8 +151,7 @@ class ParallelMLP(torch.nn.Module):
 
     def expert_capacity(self, tokens):
         world_size = mpu.get_expert_parallel_world_size(self.args)
-        tokens_per_expert = (
-            self.top_k * tokens * world_size / self.num_experts)
+        tokens_per_expert = self.top_k * tokens * world_size / self.num_experts
         return int(self.args.moe_capacity_factor * tokens_per_expert)
 
     def load_balancing_loss(self, tokens_per_expert, expert_scores):
@@ -160,12 +160,12 @@ class ParallelMLP(torch.nn.Module):
         tokens, num_experts = expert_scores.size()
         assert num_experts == self.num_experts
         assert len(tokens_per_expert.size()) == 1
-        num_experts, = tokens_per_expert.size()
+        (num_experts,) = tokens_per_expert.size()
         assert num_experts == self.num_experts
         scale = self.num_experts / (tokens * self.top_k)
         return scale * torch.dot(
-            tokens_per_expert.to(expert_scores.dtype),
-            expert_scores.mean(dim=0))
+            tokens_per_expert.to(expert_scores.dtype), expert_scores.mean(dim=0)
+        )
 
     def indices_and_bins(self, top_expert):
         # Sort the expert ids to produce the scatter/gather
@@ -177,9 +177,9 @@ class ParallelMLP(torch.nn.Module):
         top_expert = top_expert.int()
         # bin_ids is sorted list of expert ids
         # e.g. if top_expert is [0,1,0] bin_ids is [0,0,1]
-        # indices is the expert indices of the bin_ids 
+        # indices is the expert indices of the bin_ids
         # e.g. for the above it'd be [0,2,1]
-        # Both are of shape [sl * bs * topk]        
+        # Both are of shape [sl * bs * topk]
         bin_ids, indices = ops.sort(top_expert, self.sort_end_bit)
 
         # Histogram the expert ids to identify the number of
@@ -199,22 +199,22 @@ class ParallelMLP(torch.nn.Module):
         return indices, bin_ids, bins, tokens_per_expert
 
     def permute_and_compute(
-            self,
-            x,
-            tokens_per_expert, # unused
-            indices,
-            bin_ids, # unused
-            expert_weights,
-            bins,
-            expert_capacity,
-            top_k):
+        self,
+        x,
+        tokens_per_expert,  # unused
+        indices,
+        bin_ids,  # unused
+        expert_weights,
+        bins,
+        expert_capacity,
+        top_k,
+    ):
         # Route the tokens for MoE computation.
-        x = x.view(-1, x.shape[-1]) # [bs * sl, hs]
+        x = x.view(-1, x.shape[-1])  # [bs * sl, hs]
         # Permutes the tokens based on the expert indices
         # x shape: [num_experts, exp capacity, hid_dim]
         # exp capacity includes topk i.e. topk * mbs * sl / num_experts
-        x = ops.binned_gather(
-            x, indices, bins, expert_capacity, top_k)
+        x = ops.binned_gather(x, indices, bins, expert_capacity, top_k)
 
         # Perform the expert computation. Note that we don't
         # use biases for these linear operations.
@@ -222,8 +222,7 @@ class ParallelMLP(torch.nn.Module):
         x = self.mlp(x)
 
         # Un-route the data for the MoE output.
-        return ops.binned_scatter(
-            x, indices, expert_weights, bins, top_k)
+        return ops.binned_scatter(x, indices, expert_weights, bins, top_k)
 
     def forward_once(self, x, expert_weights, top_experts):
         # x: [bs, sl, hs]
@@ -232,8 +231,9 @@ class ParallelMLP(torch.nn.Module):
         expert_weights = expert_weights.flatten()
         top_experts = top_experts.flatten()
         with torch.no_grad():
-            indices, bin_ids, bins, tokens_per_expert = (
-                self.indices_and_bins(top_experts))
+            indices, bin_ids, bins, tokens_per_expert = self.indices_and_bins(
+                top_experts
+            )
 
             # If expert_capacity is set to zero, set the number of tokens
             # per expert to the maximum we need to avoid dropping tokens.
@@ -251,7 +251,8 @@ class ParallelMLP(torch.nn.Module):
             expert_weights,
             bins,
             expert_capacity,
-            self.top_k)
+            self.top_k,
+        )
         return x, tokens_per_expert
 
     def parallel_forward_once(self, x, expert_weights, top_experts):
@@ -279,14 +280,16 @@ class ParallelMLP(torch.nn.Module):
         expert_weights = expert_weights.flatten()
         top_experts = top_experts.flatten()
         with torch.no_grad():
-            indices, bin_ids, bins, tokens_per_expert = (
-                self.indices_and_bins(top_experts))
+            indices, bin_ids, bins, tokens_per_expert = self.indices_and_bins(
+                top_experts
+            )
 
             # If we're sharding the experts along the hidden dimension
             # multiple devices own parts of the same sets of experts.
             # Replicate the token counts so every device gets the counts.
             repeated_tokens_per_expert = ops.repeat(
-                tokens_per_expert, (mpu.hidden_sharding_degree(self.args),))
+                tokens_per_expert, (mpu.hidden_sharding_degree(self.args),)
+            )
 
             # Pass token count information to the device on which the
             # target expert resides.
@@ -295,7 +298,8 @@ class ParallelMLP(torch.nn.Module):
                 parallel_tokens_per_expert,
                 repeated_tokens_per_expert,
                 group=self.args.expert_parallel_group,
-                async_op=True)
+                async_op=True,
+            )
 
         # Permute locally and without any padding so that tokens for each
         # parallel device are stored contiguously.
@@ -303,12 +307,7 @@ class ParallelMLP(torch.nn.Module):
         # This view updates the shape of the tensor from [sl, bs, hs] to
         # [sl * bs, hs] prior to the permutation.
         x = x.view(-1, x.shape[-1])
-        x = ops.gather(
-            x,
-            indices,
-            bin_ids,
-            bins,
-            self.top_k)
+        x = ops.gather(x, indices, bin_ids, bins, self.top_k)
 
         # Compute the number of tokens that will be received from each
         # device and permute the input data across the devices.
@@ -318,10 +317,12 @@ class ParallelMLP(torch.nn.Module):
 
             # Reshape to [world_size, num_experts_per_rank].
             world_size = mpu.get_expert_parallel_world_size(self.args)
-            repeated_tokens_per_expert = (
-                repeated_tokens_per_expert.view(world_size, experts_per_rank))
-            parallel_tokens_per_expert = (
-                parallel_tokens_per_expert.view(world_size, experts_per_rank))
+            repeated_tokens_per_expert = repeated_tokens_per_expert.view(
+                world_size, experts_per_rank
+            )
+            parallel_tokens_per_expert = parallel_tokens_per_expert.view(
+                world_size, experts_per_rank
+            )
 
             # TODO(tgale): It might be faster to do this on the GPU and
             # then communicate the results back to the host.
@@ -345,9 +346,8 @@ class ParallelMLP(torch.nn.Module):
         # Start the cross-device permutation asynchronously so we can
         # overlap communication with computation.
         parallel_x, parallel_x_handle = all_to_all(
-            x, recv_counts, send_counts,
-            self.args.expert_parallel_group,
-            async_op=True)
+            x, recv_counts, send_counts, self.args.expert_parallel_group, async_op=True
+        )
 
         with torch.no_grad():
             # After we do the cross-device permutation we have the tokens on the
@@ -357,7 +357,8 @@ class ParallelMLP(torch.nn.Module):
             # rest of this torch.no_grad() scope sets up the indices and bins
             # for this permutation.
             replicate_bins = ops.inclusive_cumsum(
-                parallel_tokens_per_expert.flatten(), 0)
+                parallel_tokens_per_expert.flatten(), 0
+            )
             replicate_bins = (
                 replicate_bins.view(1)
                 if not len(replicate_bins.size())
@@ -369,23 +370,24 @@ class ParallelMLP(torch.nn.Module):
                 torch.arange(
                     self.num_experts * mpu.hidden_sharding_degree(self.args),
                     dtype=torch.int32,
-                    device=indices.device
+                    device=indices.device,
                 ),
                 mpu.experts_per_rank(self.args),
             )
             parallel_top_expert = ops.replicate(
-                parallel_top_expert.unsqueeze(dim=0),
-                replicate_bins, tokens_received).flatten()
+                parallel_top_expert.unsqueeze(dim=0), replicate_bins, tokens_received
+            ).flatten()
 
             # TODO(tgale): The sort_end_bit here can be reduced.
             parallel_bin_ids, parallel_indices = ops.sort(
-                parallel_top_expert, self.sort_end_bit)
+                parallel_top_expert, self.sort_end_bit
+            )
 
             # Calculate the bins boundaries from the token counts.
             parallel_tokens_per_expert = parallel_tokens_per_expert.sum(
-                dim=0, dtype=torch.int)
-            parallel_bins = ops.inclusive_cumsum(
-                parallel_tokens_per_expert, 0)
+                dim=0, dtype=torch.int
+            )
+            parallel_bins = ops.inclusive_cumsum(parallel_tokens_per_expert, 0)
             parallel_bins = (
                 parallel_bins.view(1)
                 if not len(parallel_bins.size())
@@ -397,17 +399,17 @@ class ParallelMLP(torch.nn.Module):
             tokens, hs = x.size()
             expert_capacity = self.expert_capacity(tokens)
             if expert_capacity == 0:
-                expert_capacity = torch.max(
-                    parallel_tokens_per_expert).item()
+                expert_capacity = torch.max(parallel_tokens_per_expert).item()
 
         # Locally permute the tokens and perform the expert computation.
         # Block to make sure that the cross-device permutation is complete.
-        if self.args.mlp_impl == 'grouped':
+        if self.args.mlp_impl == "grouped":
             # GroupedMLP requires counts on CPU. We can use the tensor already
             # moved to CPU for the prior all_to_all, which avoids an extra
             # device synchronization.
             parallel_tokens_per_expert = parallel_tokens_per_expert_cpu.sum(
-                dim=0, dtype=torch.int)
+                dim=0, dtype=torch.int
+            )
         parallel_x_handle.wait()
         parallel_x = self.permute_and_compute(
             parallel_x,
@@ -417,39 +419,29 @@ class ParallelMLP(torch.nn.Module):
             None,  # expert_weights
             parallel_bins,
             expert_capacity,
-            top_k=1)
+            top_k=1,
+        )
 
         # Un-permute the tokens across the devices.
         x, _ = all_to_all(
-            parallel_x, send_counts, recv_counts,
-            self.args.expert_parallel_group)
+            parallel_x, send_counts, recv_counts, self.args.expert_parallel_group
+        )
 
         # Reduce along the hidden sharding to get the final outputs.
         #
         # TODO(tgale): Fuse this into the following local permutation.
-        shape = (
-            mpu.hidden_sharding_degree(self.args),
-            -1,
-            self.args.hidden_size
-        )
+        shape = (mpu.hidden_sharding_degree(self.args), -1, self.args.hidden_size)
         x = ops.sum(x.view(shape), dim=0)
 
         # Un-permute locally to setup for the next series of operations.
-        x = ops.scatter(
-            x,
-            indices,
-            bin_ids,
-            expert_weights,
-            bins,
-            self.top_k)
+        x = ops.scatter(x, indices, bin_ids, expert_weights, bins, self.top_k)
         return x, tokens_per_expert.flatten()
 
     def forward(self, x, scores, logits, expert_weights, top_experts):
         in_shape = x.size()
 
         # Compute the experts.
-        x, tokens_per_expert = self.forward_fn(
-            x, expert_weights, top_experts)
+        x, tokens_per_expert = self.forward_fn(x, expert_weights, top_experts)
         if self.training and self.args.moe_loss_weight > 0:
             save_load_balancing_loss((tokens_per_expert, scores, logits))
         x = x.view(in_shape)
@@ -490,20 +482,25 @@ class ParallelMLP(torch.nn.Module):
         bs, sl, hs = x.shape
         _, num_experts, k = expert_weights.shape
         # [bs, num_experts, k, sl]
-        expert_gather_indices = torch.nn.functional.one_hot(top_experts, num_classes=sl).to(x.dtype)
+        expert_gather_indices = torch.nn.functional.one_hot(
+            top_experts, num_classes=sl
+        ).to(x.dtype)
         # [bs, sl, num_experts, k]
         expert_gather_indices = torch.moveaxis(expert_gather_indices, 3, 1)
-        x_in = torch.einsum('bs...,bsek->bek...', x, expert_gather_indices)
+        x_in = torch.einsum("bs...,bsek->bek...", x, expert_gather_indices)
         x_in = x_in.permute(1, 0, 2, 3).reshape(num_experts, bs * k, hs)
-        x_e = self.mlp(x_in) # [num_experts, bs*k, d]
-        combine_array = torch.einsum('...ek,...sek->...sek', expert_weights, expert_gather_indices)
+        x_e = self.mlp(x_in)  # [num_experts, bs*k, d]
+        combine_array = torch.einsum(
+            "...ek,...sek->...sek", expert_weights, expert_gather_indices
+        )
         x_e = x_e.reshape(num_experts, bs, k, hs).permute(1, 0, 2, 3)
-        x_out = torch.einsum('bek...,bsek->bs...', x_e, combine_array)
-        return x_out                
+        x_out = torch.einsum("bek...,bsek->bs...", x_e, combine_array)
+        return x_out
+
 
 class MoE(torch.nn.Module):
 
-    def __init__(self, args : Arguments):
+    def __init__(self, args: Arguments):
         super(MoE, self).__init__()
 
         # Token router.
@@ -527,6 +524,7 @@ class MoE(torch.nn.Module):
 
         # Compute the expert scores and assignments.
         scores, logits, expert_weights, top_experts = self.router(x)
+        ipdb.set_trace()
 
         # Compute the experts.
         out = self.experts(x, scores, logits, expert_weights, top_experts)

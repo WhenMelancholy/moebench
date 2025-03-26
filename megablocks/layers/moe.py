@@ -500,7 +500,12 @@ class ParallelMLP(torch.nn.Module):
 
 class MoE(torch.nn.Module):
 
-    def __init__(self, args: Arguments):
+    def __init__(
+        self,
+        args: Arguments,
+        random_router: bool = False,
+        prune_list: None | torch.Tensor = None,
+    ):
         super(MoE, self).__init__()
 
         # Token router.
@@ -514,21 +519,27 @@ class MoE(torch.nn.Module):
             # SharedExpert computation helper.
             self.shared_expert = sharedexpert_registry.get(args)
 
+        self.random_router = random_router
+        self.prune_list = prune_list
+
     def _init_experts_mlp(self, args: Arguments):
         return ParallelMLP(args)
 
-    def forward(self, x):
+    def forward(self, x, output_router_logits=False):
         # NOTE: If we're going to cast the activations to lower precision
         # do it before we permute the tokens to save bandwidth.
         x = common.cast_if_autocast_enabled(x)
 
         # Compute the expert scores and assignments.
-        scores, logits, expert_weights, top_experts = self.router(x)
-        ipdb.set_trace()
+        scores, logits, expert_weights, top_experts = self.router(
+            x, self.random_router, self.prune_list
+        )
 
         # Compute the experts.
         out = self.experts(x, scores, logits, expert_weights, top_experts)
         if self.shared_expert is not None:
             shared_expert_out = self.shared_expert(x)
             out = self.shared_expert.add_experts_sharedexpert(shared_expert_out, out)
+        if output_router_logits:
+            return out, logits
         return out

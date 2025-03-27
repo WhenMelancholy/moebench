@@ -3,17 +3,24 @@ from dataclasses import fields
 from typing import Callable, List, Optional, Tuple, Union
 
 import torch
-from transformers import PreTrainedModel
-from transformers.cache_utils import Cache
-from transformers.modeling_outputs import CausalLMOutputWithPast
-from transformers.models.auto import AutoModelForCausalLM
-
 from olmo.config import ActivationCheckpointingStrategy, ModelConfig
 from olmo.model import OLMo
+from torch import nn
+from transformers import PreTrainedModel
+from transformers.cache_utils import Cache
+from transformers.modeling_outputs import (
+    BaseModelOutputWithPast,
+    CausalLMOutputWithPast,
+    QuestionAnsweringModelOutput,
+    SequenceClassifierOutputWithPast,
+    TokenClassifierOutput,
+)
+from transformers.models.auto import AutoModelForCausalLM
 
 from .configuration_olmo import OLMoConfig
 
 log = logging.getLogger(__name__)
+logger = log
 
 
 def create_model_config_from_pretrained_config(config: OLMoConfig):
@@ -50,8 +57,13 @@ class OLMoForCausalLM(PreTrainedModel):
     _supports_sdpa = True
     supports_gradient_checkpointing = True
 
-    def __init__(self, config: OLMoConfig, model: Optional[OLMo] = None, init_params: bool = False):
+    def __init__(self, config: OLMoConfig, model: Optional[OLMo] = None, init_params: bool = False, **kwargs):
         super().__init__(config)
+
+        if kwargs.__len__() > 0:
+            config.update(kwargs)
+            print("Updating config with kwargs")
+            print("New config: ", config)
 
         self._gradient_checkpointing_func: Optional[Callable] = None
         self._gradient_checkpointing = False
@@ -254,7 +266,121 @@ class OLMoForCausalLM(PreTrainedModel):
         return model_embeds
 
 
+class OLMoForSequenceClassification(PreTrainedModel):
+    config_class = OLMoConfig
+    base_model_prefix = "model"
+    _no_split_modules = ["OLMoBlock"]
+    _supports_flash_attn_2 = True
+    _supports_sdpa = True
+    supports_gradient_checkpointing = True
+
+    def __init__(self, config: OLMoConfig, init_params: bool = False):
+        super().__init__(config)
+        self.num_labels = config.num_labels
+        self.config = config
+
+        model_config = create_model_config_from_pretrained_config(config)
+        # Initialize model (always on CPU to start with so we don't run out of GPU memory).
+        model_config.init_device = "cpu"
+        self.model = OLMo(model_config, init_params=init_params)
+        self.score = nn.Linear(config.hidden_size, self.num_labels, bias=False)
+
+        # Initialize weights and apply final processing
+        self.post_init()
+
+    def get_input_embeddings(self) -> torch.nn.Module:
+        return self.model.transformer.wte
+
+    def set_input_embeddings(self, value: torch.nn.Module):
+        self.model.transformer.wte = value
+
+    def forward(
+        self,
+        input_ids: Optional[torch.LongTensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.LongTensor] = None,
+        past_key_values: Optional[Union[Cache, List[torch.FloatTensor]]] = None,
+        inputs_embeds: Optional[torch.FloatTensor] = None,
+        labels: Optional[torch.LongTensor] = None,
+        use_cache: Optional[bool] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
+        cache_position: Optional[
+            Cache
+        ] = None,  # This is a hack mitigation of an issue in transformers `4.39.x` https://github.com/huggingface/transformers/issues/29426
+    ) -> Union[Tuple, SequenceClassifierOutputWithPast]:
+        r"""
+        labels (`torch.LongTensor` of shape `(batch_size,)`, *optional*):
+            Labels for computing the sequence classification/regression loss. Indices should be in `[0, ...,
+            config.num_labels - 1]`. If `config.num_labels == 1` a regression loss is computed (Mean-Square loss), If
+            `config.num_labels > 1` a classification loss is computed (Cross-Entropy).
+        """
+        if use_cache is None:
+            use_cache = self.config.use_cache
+
+        if output_attentions:
+            raise ValueError("output_attentions is not yet supported in OLMo")
+
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+
+        transformer_outputs = self.model(
+            input_ids,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            past_key_values=past_key_values,
+            inputs_embeds=inputs_embeds,
+            use_cache=use_cache,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict,
+        )
+        hidden_states = transformer_outputs[0]
+        logits = self.score(hidden_states)
+
+        if input_ids is not None:
+            batch_size = input_ids.shape[0]
+        else:
+            batch_size = inputs_embeds.shape[0]
+
+        if self.config.pad_token_id is None and batch_size != 1:
+            raise ValueError("Cannot handle batch sizes > 1 if no padding token is defined.")
+        if self.config.pad_token_id is None:
+            last_non_pad_token = -1
+        elif input_ids is not None:
+            # To handle both left- and right- padding, we take the rightmost token that is not equal to pad_token_id
+            non_pad_mask = (input_ids != self.config.pad_token_id).to(logits.device, torch.int32)
+            token_indices = torch.arange(input_ids.shape[-1], device=logits.device)
+            last_non_pad_token = (token_indices * non_pad_mask).argmax(-1)
+        else:
+            last_non_pad_token = -1
+            logger.warning_once(
+                f"{self.__class__.__name__} will not detect padding tokens in `inputs_embeds`. Results may be "
+                "unexpected if using padding tokens in conjunction with `inputs_embeds.`"
+            )
+
+        pooled_logits = logits[torch.arange(batch_size, device=logits.device), last_non_pad_token]
+
+        loss = None
+        if labels is not None:
+            loss = self.loss_function(
+                logits=logits, labels=labels, pooled_logits=pooled_logits, config=self.config
+            )
+
+        if not return_dict:
+            output = (pooled_logits,) + transformer_outputs[1:]
+            return ((loss,) + output) if loss is not None else output
+
+        return SequenceClassifierOutputWithPast(
+            loss=loss,
+            logits=pooled_logits,
+            past_key_values=transformer_outputs.past_key_values,
+            hidden_states=transformer_outputs.hidden_states,
+        )
+
+
 # Register the model so that it is available for transformer pipelines, auto-loading, etc.
 # OLMo is integrated directly in transformers from v4.40.0 onwards, but the version in transformers
 # may not support the newest architectures we create.
 AutoModelForCausalLM.register(OLMoConfig, OLMoForCausalLM)
+AutoModelForCausalLM.register(OLMoConfig, OLMoForSequenceClassification)

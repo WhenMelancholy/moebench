@@ -529,6 +529,26 @@ class ModelConfig(BaseConfig):
     Apply norm after the attention/feedforward layers rather than before, as introduced in the Swin transformer paper (Liu et al).
     """
 
+    random_router: bool = False
+    """
+    Whether to use a random router in the MoE block.
+    """
+
+    prune_list: None | str | torch.Tensor = None
+    """
+    Expert pruning list.
+    """
+
+    save_router_logits: str | None = None
+    """
+    Path to save router logits.
+    """
+
+    prune_experts: None | str | torch.Tensor = None
+    """
+    Weight information to calculate expert pruning.
+    """
+
     @property
     def effective_n_kv_heads(self) -> int:
         if self.n_kv_heads is None:

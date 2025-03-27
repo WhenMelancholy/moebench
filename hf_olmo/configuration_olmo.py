@@ -2,11 +2,10 @@
 OLMo configuration
 """
 
-from transformers import AutoConfig, PretrainedConfig
-from transformers.utils import logging
-
 from olmo.config import ModelConfig
 from olmo.exceptions import OLMoConfigurationError
+from transformers import AutoConfig, PretrainedConfig
+from transformers.utils import logging
 
 logger = logging.get_logger(__name__)
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 import sys
 from abc import abstractmethod
 from collections import defaultdict
@@ -55,6 +56,13 @@ elif sys.version_info.minor == 8:
     from typing import MutableMapping
 else:
     raise SystemExit("This script supports Python 3.8 or higher")
+
+try:
+    from megablocks.layers.dmoe import dMoE
+
+    # from megablocks.layers.moe import MoE as MoE_old # we will not support MoE for simplicity
+except ImportError:
+    raise ImportError("To train MoEs, run `pip install git+https://github.com/Muennighoff/megablocks.git@olmoe`")
 
 __all__ = [
     "LayerNormBase",
@@ -678,19 +686,25 @@ class OLMoEBlock(OLMoBlock):
     """
 
     def __init__(self, layer_id: int, config: ModelConfig, cache: BufferCache):
-        try:
-            from megablocks.layers.dmoe import dMoE
-            from megablocks.layers.moe import MoE
-        except ImportError:
-            raise ImportError(
-                "To train MoEs, run `pip install git+https://github.com/Muennighoff/megablocks.git@olmoe`"
-            )
+
         from .config import config_to_moe_args
 
         super().__init__(layer_id, config, cache)
 
         self.moe_args = config_to_moe_args(config)
-        self.ffn = dMoE(self.moe_args) if self.config.moe_dropless else MoE(self.moe_args)
+        self.ffn = (
+            dMoE(
+                self.moe_args,
+                random_router=config.random_router,
+                prune_list=config.prune_list[layer_id] if config.prune_list is not None else None,
+            )
+            if self.config.moe_dropless
+            else MoE(
+                self.moe_args,
+                random_router=config.random_router,
+                prune_list=config.prune_list[layer_id] if config.prune_list is not None else None,
+            )
+        )
 
         self.attn_norm = LayerNorm.build(config)
         self.ff_norm = LayerNorm.build(config)
@@ -747,6 +761,7 @@ class OLMoEBlock(OLMoBlock):
         use_cache: bool = False,
         max_doc_len: Optional[int] = None,
         cu_doc_lens: Optional[torch.Tensor] = None,
+        output_router_logits: bool = False,
     ) -> Tuple[torch.Tensor, Optional[Tuple[torch.Tensor, torch.Tensor]]]:
         # Get query, key, value projections.
         # shape:
@@ -808,11 +823,15 @@ class OLMoEBlock(OLMoBlock):
         og_x = x
 
         if self.config.norm_after:
-            x = self.ffn(x)
+            x = self.ffn(x, output_router_logits=output_router_logits)
+            if output_router_logits:
+                x, router_logits = x
             if self._activation_checkpoint_fn is not None:
                 x = self._activation_checkpoint_fn(self.ff_norm, x)  # type: ignore
             else:
                 x = self.ff_norm(x)
+            if output_router_logits:
+                return og_x + self.dropout(x), cache, router_logits
             return og_x + self.dropout(x), cache
         else:
             if self._activation_checkpoint_fn is not None:
@@ -820,7 +839,11 @@ class OLMoEBlock(OLMoBlock):
             else:
                 x = self.ff_norm(x)
             # Activation checkpointing for the MoE FFN is not supported
-            return og_x + self.dropout(self.ffn(x)), cache
+            x = self.ffn(x, output_router_logits=output_router_logits)
+            if output_router_logits:
+                x, router_logits = x
+                return og_x + self.dropout(x), cache, router_logits
+            return og_x + self.dropout(x), cache
 
 
 class OLMoSequentialBlock(OLMoBlock):
@@ -1172,14 +1195,17 @@ class OLMoBlockGroup(nn.ModuleList):
         use_cache: bool = False,
         max_doc_len: Optional[int] = None,
         cu_doc_lens: Optional[torch.Tensor] = None,
+        output_router_logits: bool = False,
+        **kwargs,
     ) -> Tuple[torch.Tensor, Optional[List[Tuple[torch.Tensor, torch.Tensor]]]]:
         attn_key_values: Optional[List[Tuple[torch.Tensor, torch.Tensor]]] = [] if use_cache else None
+        router_logits: Optional[List[torch.Tensor]] = [] if output_router_logits else None
         for block_idx, block in enumerate(self):
             layer_past = None if layers_past is None else layers_past[block_idx]
             block_idx += self.layer_offset
             if should_checkpoint_block(self.activation_checkpointing_strategy, block_idx):
                 # shape: (batch_size, seq_len, d_model)
-                x, cache = self._activation_checkpoint_fn(  # type: ignore
+                out = self._activation_checkpoint_fn(  # type: ignore
                     block,
                     x,
                     attention_bias=attention_bias,
@@ -1187,20 +1213,29 @@ class OLMoBlockGroup(nn.ModuleList):
                     use_cache=use_cache,
                     max_doc_len=max_doc_len,
                     cu_doc_lens=cu_doc_lens,
+                    **kwargs,
                 )
             else:
                 # shape: (batch_size, seq_len, d_model)
-                x, cache = block(
+                out = block(
                     x,
                     attention_bias=attention_bias,
                     layer_past=layer_past,
                     use_cache=use_cache,
                     max_doc_len=max_doc_len,
                     cu_doc_lens=cu_doc_lens,
+                    **kwargs,
                 )
+            if output_router_logits:
+                x, cache, router_logit = out
+                router_logits.append(router_logit)
+            else:
+                x, cache = out
             if attn_key_values is not None:
                 assert cache is not None
                 attn_key_values.append(cache)
+        if output_router_logits:
+            return x, attn_key_values, router_logits
         return x, attn_key_values
 
     def reset_parameters(self):
@@ -1250,6 +1285,28 @@ class OLMo(nn.Module):
         torch.backends.cuda.enable_flash_sdp(True)
         torch.backends.cuda.enable_mem_efficient_sdp(False)  # this is super slow so make sure torch won't use it
 
+        self.save_router_logits = config.asdict().get("save_router_logits", None)
+        if self.save_router_logits is not None:
+            self.router_logits = ()
+        self.prune_experts = config.asdict().get("prune_experts", None)
+        self.prune_expert_count = config.asdict().get(
+            "prune_expert_count", config.moe_top_k + int(config.moe_shared_expert)
+        )
+        prune_list = config.asdict().get("prune_list", None)
+        if prune_list is not None:
+            config.prune_list = torch.load(prune_list)
+        if self.prune_experts is not None:
+            self.prune_experts = torch.load(self.prune_experts, map_location="cpu")
+            prune_experts = []
+            # ipdb.set_trace()
+            for i in range(self.prune_experts.shape[0]):
+                layer_logits = self.prune_experts[i]
+                selected_experts = torch.topk(layer_logits, k=config.moe_top_k, dim=-1).indices
+                expert_frequency = torch.bincount(selected_experts.flatten(), minlength=config.moe_num_experts)
+                prune_expert = torch.topk(expert_frequency, k=self.prune_expert_count).indices
+                prune_experts.append(prune_expert)
+            config.prune_list = prune_experts
+
         self.transformer = nn.ModuleDict(
             dict(
                 wte=nn.Embedding(
@@ -1298,6 +1355,20 @@ class OLMo(nn.Module):
         if self.config.alibi:
             get_causal_attention_bias(self.__cache, config.max_sequence_length, _non_meta_init_device(config))
             self.get_alibi_attention_bias(config.max_sequence_length, _non_meta_init_device(config))
+
+    def __del__(self, *args, **kwargs):
+        if self.save_router_logits is not None:
+            new_logits = []
+            for i in range(self.config.n_layers):
+                layer_logits = ()
+                for item in self.router_logits:
+                    layer_logits += (item[i],)
+                # ipdb.set_trace()
+                new_logits.append(torch.concat(layer_logits, dim=0))
+            new_logits = torch.stack(new_logits, dim=0)
+            dir = os.path.dirname(self.save_router_logits)
+            os.makedirs(dir, exist_ok=True)
+            torch.save(new_logits, self.save_router_logits)
 
     def set_activation_checkpointing(
         self, strategy: Optional[ActivationCheckpointingStrategy], checkpoint_func: Optional[Callable] = None
@@ -1524,6 +1595,7 @@ class OLMo(nn.Module):
                 ensure_finite_(attention_bias, check_neg_inf=True, check_pos_inf=False)
 
         attn_key_values: Optional[List[Tuple[torch.Tensor, torch.Tensor]]] = [] if use_cache else None
+        router_logits: Optional[List[torch.Tensor]] = [] if self.save_router_logits is not None else None
 
         # decoder layers
         all_hidden_states = []
@@ -1538,7 +1610,7 @@ class OLMo(nn.Module):
                 layer_past = None if past_key_values is None else past_key_values[block_idx]
                 if should_checkpoint_block(self.activation_checkpointing_strategy, block_idx):
                     # shape: (batch_size, seq_len, d_model)
-                    x, cache = self._activation_checkpoint_fn(
+                    out = self._activation_checkpoint_fn(
                         block,
                         x,
                         attention_bias=attention_bias,
@@ -1546,17 +1618,24 @@ class OLMo(nn.Module):
                         use_cache=use_cache,
                         max_doc_len=max_doc_len,
                         cu_doc_lens=cu_doc_lens,
+                        output_router_logits=self.save_router_logits is not None,
                     )
                 else:
                     # shape: (batch_size, seq_len, d_model)
-                    x, cache = block(
+                    out = block(
                         x,
                         attention_bias=attention_bias,
                         layer_past=layer_past,
                         use_cache=use_cache,
                         max_doc_len=max_doc_len,
                         cu_doc_lens=cu_doc_lens,
+                        output_router_logits=self.save_router_logits is not None,
                     )
+                if self.save_router_logits is not None:
+                    x, cache, router_logit = out
+                    router_logits.append(router_logit)
+                else:
+                    x, cache = out
 
                 if attn_key_values is not None:
                     assert cache is not None
@@ -1574,17 +1653,26 @@ class OLMo(nn.Module):
                         group_idx * self.config.block_group_size : (group_idx + 1) * self.config.block_group_size
                     ]
                 )
-                x, cache = block_group(
+                out = block_group(
                     x,
                     attention_bias=attention_bias,
                     layers_past=layers_past,
                     use_cache=use_cache,
                     max_doc_len=max_doc_len,
                     cu_doc_lens=cu_doc_lens,
+                    output_router_logits=self.save_router_logits is not None,
                 )
+                if self.save_router_logits is not None:
+                    x, cache, router_logit = out
+                    router_logits.extend(router_logit)
+                else:
+                    x, cache = out
                 if attn_key_values is not None:
                     assert cache is not None
                     attn_key_values.extend(cache)
+
+        if self.save_router_logits is not None:
+            self.router_logits += (router_logits,)
 
         if last_logits_only:
             # shape: (batch_size, 1, d_model)
@@ -2032,4 +2120,5 @@ class OLMo(nn.Module):
         for new_key, og_key in new_keys_to_og_keys.items():
             og_keys_to_new[og_key].add(new_key)
 
+        return state_dict, og_keys_to_new
         return state_dict, og_keys_to_new

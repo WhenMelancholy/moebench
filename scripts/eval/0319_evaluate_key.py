@@ -41,17 +41,26 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 # # Load different ckpts via passing e.g. `revision=step10000-tokens41B`
 print(f"Loading model from {config.model_path}")
 if "qwen" in config.model_path:
-    model = AutoModelForCausalLM.from_pretrained(
-        config.model_path,
-        trust_remote_code=True,
-        attn_implementation="flash_attention_2",
-        torch_dtype=torch.bfloat16,
-    ).to("cuda:0")
+    model = (
+        AutoModelForCausalLM.from_pretrained(
+            config.model_path,
+            trust_remote_code=True,
+            attn_implementation="flash_attention_2",
+            torch_dtype=torch.bfloat16,
+        )
+        .to("cuda:0")
+        .eval()
+    )
 else:
-    model = AutoModelForCausalLM.from_pretrained(
-        config.model_path,
-        trust_remote_code=True,
-    ).to("cuda:0")
+    model = (
+        AutoModelForCausalLM.from_pretrained(
+            config.model_path,
+            trust_remote_code=True,
+            torch_dtype=torch.bfloat16,
+        )
+        .to("cuda:0")
+        .eval()
+    )
 tokenizer = AutoTokenizer.from_pretrained(config.model_path)
 print(f"model's generation config: {model.generation_config}")
 if "llama" in config.model_path:
@@ -81,22 +90,23 @@ for index, item in tqdm(
     #     return_dict_in_generate=True,
     #     num_return_sequences=50,
     # )
-    outputs = model.generate(
-        tokenized_chat,
-        max_new_tokens=2048,
-        output_scores=True,
-        return_dict_in_generate=True,
-        no_repeat_ngram_size=2,
-        top_k=50,
-        num_beam_groups=16,
-        num_beams=64,
-        diversity_penalty=0.8,
-        num_return_sequences=50,
-        do_sample=False,
-        temperature=1.0,
-        top_p=1.0,
-        repetition_penalty=1.0,
-    )
+    with torch.no_grad():
+        outputs = model.generate(
+            tokenized_chat,
+            max_new_tokens=2048,
+            output_scores=True,
+            return_dict_in_generate=True,
+            no_repeat_ngram_size=2,
+            top_k=50,
+            num_beam_groups=16,
+            num_beams=64,
+            diversity_penalty=0.8,
+            num_return_sequences=50,
+            do_sample=False,
+            temperature=1.0,
+            top_p=1.0,
+            repetition_penalty=1.0,
+        )
     sequences = outputs.sequences
 
     # assistant_text = tokenizer.decode(out[0], skip_special_tokens=True)
@@ -114,6 +124,9 @@ for index, item in tqdm(
     if index < 5:
         print(item)
     results.append(item)
+
+    gc.collect()
+    torch.cuda.empty_cache()
 # %%
 with open(config.output_path, "w") as f:
     for item in results:

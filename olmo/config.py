@@ -534,7 +534,7 @@ class ModelConfig(BaseConfig):
     Whether to use a random router in the MoE block.
     """
 
-    prune_list: None | str | torch.Tensor = None
+    prune_list: None | str = None
     """
     Expert pruning list.
     """
@@ -544,7 +544,7 @@ class ModelConfig(BaseConfig):
     Path to save router logits.
     """
 
-    prune_experts: None | str | torch.Tensor = None
+    prune_experts: None | str = None
     """
     Weight information to calculate expert pruning.
     """

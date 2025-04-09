@@ -34,11 +34,12 @@ import torch.distributed as dist
 import torch.nn.functional as F
 import torch.utils
 import torch.utils.hooks
-import wandb
 from packaging import version
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
+
+import wandb
 
 from .aliases import PathOrStr
 from .checkpoint import Checkpointer, FullCheckpointer, build_sharded_checkpointer
@@ -859,12 +860,15 @@ class Trainer:
                         lb_loss = lb_loss / len(micro_batches)
                         moe_z_loss = moe_z_loss / len(micro_batches)
                     elif self.model.config.moe_loss_weight:
-                        lb_loss = batched_load_balancing_loss(self.moe_args) / len(micro_batches)
+                        lb_loss = batched_load_balancing_loss(self.moe_args)
+                        if isinstance(lb_loss, tuple):
+                            lb_loss, moe_z_loss = lb_loss
+                        lb_loss = lb_loss / len(micro_batches)
                     if self.model.config.moe_log_expert_assignment:
                         if self.model.config.moe_zloss_weight:
                             tokens_per_expert, _, _ = zip(*get_load_balancing_loss())
                         else:
-                            tokens_per_expert, _ = zip(*get_load_balancing_loss())
+                            tokens_per_expert, _, _ = zip(*get_load_balancing_loss())
                         expert_assignments += torch.stack(tokens_per_expert, dim=0)
                     clear_load_balancing_loss()
                     if self.model.config.moe_loss_weight:

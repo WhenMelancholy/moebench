@@ -549,6 +549,16 @@ class ModelConfig(BaseConfig):
     Weight information to calculate expert pruning.
     """
 
+    bias_u: None | float = None
+    """
+    Bias update rate for aux free router
+    """
+
+    bias_update_step: None | int = 64
+    """
+    Bias update step for aux free router
+    """
+
     @property
     def effective_n_kv_heads(self) -> int:
         if self.n_kv_heads is None:

@@ -6,6 +6,7 @@ Adapted from
 
 from __future__ import annotations
 
+import atexit
 import logging
 import math
 import os
@@ -697,12 +698,16 @@ class OLMoEBlock(OLMoBlock):
                 self.moe_args,
                 random_router=config.random_router,
                 prune_list=config.prune_list[layer_id] if config.prune_list is not None else None,
+                bias_u=config.bias_u,
+                bias_update_step=config.bias_update_step,
             )
             if self.config.moe_dropless
             else MoE(
                 self.moe_args,
                 random_router=config.random_router,
                 prune_list=config.prune_list[layer_id] if config.prune_list is not None else None,
+                bias_u=config.bias_u,
+                bias_update_step=config.bias_update_step,
             )
         )
 
@@ -1288,6 +1293,7 @@ class OLMo(nn.Module):
         self.save_router_logits = config.asdict().get("save_router_logits", None)
         if self.save_router_logits is not None:
             self.router_logits = ()
+            atexit.register(self.save_router_data)
         self.prune_experts = config.asdict().get("prune_experts", None)
         self.prune_expert_count = config.asdict().get(
             "prune_expert_count", config.moe_top_k + int(config.moe_shared_expert)
@@ -1356,7 +1362,7 @@ class OLMo(nn.Module):
             get_causal_attention_bias(self.__cache, config.max_sequence_length, _non_meta_init_device(config))
             self.get_alibi_attention_bias(config.max_sequence_length, _non_meta_init_device(config))
 
-    def __del__(self, *args, **kwargs):
+    def save_router_data(self, *args, **kwargs):
         if self.save_router_logits is not None:
             new_logits = []
             for i in range(self.config.n_layers):

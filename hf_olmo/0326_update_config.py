@@ -10,7 +10,10 @@ from tqdm.auto import tqdm
 for folder in glob("runs/*"):
     model_dir = folder + "/latest"
     if not os.path.exists(model_dir):
-        print(f"Skipping {folder}")
+        print(f"Skipping {folder} since latest does not exist")
+        continue
+    if not os.path.exists(f"{model_dir}/config.json"):
+        print(f"Skipping {folder} since config.json does not exist")
         continue
     if not os.path.exists(f"{model_dir}/config.bak.json"):
         shutil.copy(f"{model_dir}/config.json", f"{model_dir}/config.bak.json")

@@ -3,6 +3,7 @@ data/
 logs/
 routing_output/
 routing_output.zip
+results/
 
 # build artifacts
 .eggs/

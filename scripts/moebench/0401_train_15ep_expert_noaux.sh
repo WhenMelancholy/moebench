@@ -8,7 +8,7 @@
 #SBATCH -e logs/slurm_pretrain_noaux/%A_%a_%j.err
 #SBATCH --mail-user=mufan@cs.unc.edu
 #SBATCH --mail-type=FAIL
-#SBATCH --array=0-8%1
+#SBATCH --array=0-7%1
 
 set -ex
 
@@ -25,7 +25,7 @@ shared_expert=${shared_experts[$SLURM_ARRAY_TASK_ID]}
 
 export CONFIG_NAME=0312-OLMoE-300M-15ep
 CONFIG_PATH=configs/${CONFIG_NAME}.yml
-ARGS="--run_name=${CONFIG_NAME}-${topk}of${expert}-shared${shared_expert}-noaux --save-overwrite --fsdp.sharding_strategy=FULL_SHARD --device_train_microbatch_size=8 --canceled_check_interval=9999999 --model.moe_num_experts=${expert} --model.moe_top_k=${topk} --model.mlp_ratio=${mlp_ratio} --model.moe_shared_expert=${shared_expert} --model.moe_loss_weight=null"
+ARGS="--run_name=${CONFIG_NAME}-${topk}of${expert}-shared${shared_expert}-noaux --save-overwrite --fsdp.sharding_strategy=FULL_SHARD --device_train_microbatch_size=8 --canceled_check_interval=9999999 --model.moe_num_experts=${expert} --model.moe_top_k=${topk} --model.mlp_ratio=${mlp_ratio} --model.moe_shared_expert=${shared_expert} --model.moe_loss_weight=0.0 --model.moe_zloss_weight=0.0"
 DATE=0319
 
 # export WANDB_API_KEY="dc819d760ed4bb33f5565fd184c37dd03b5b35e4"

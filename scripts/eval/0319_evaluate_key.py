@@ -41,26 +41,20 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 # # Load different ckpts via passing e.g. `revision=step10000-tokens41B`
 print(f"Loading model from {config.model_path}")
 if "qwen" in config.model_path:
-    model = (
-        AutoModelForCausalLM.from_pretrained(
-            config.model_path,
-            trust_remote_code=True,
-            attn_implementation="flash_attention_2",
-            torch_dtype=torch.bfloat16,
-        )
-        .to("cuda:0")
-        .eval()
-    )
+    model = AutoModelForCausalLM.from_pretrained(
+        config.model_path,
+        trust_remote_code=True,
+        attn_implementation="flash_attention_2",
+        torch_dtype=torch.bfloat16,
+        device_map="auto",
+    ).eval()
 else:
-    model = (
-        AutoModelForCausalLM.from_pretrained(
-            config.model_path,
-            trust_remote_code=True,
-            torch_dtype=torch.bfloat16,
-        )
-        .to("cuda:0")
-        .eval()
-    )
+    model = AutoModelForCausalLM.from_pretrained(
+        config.model_path,
+        trust_remote_code=True,
+        torch_dtype=torch.bfloat16,
+        device_map="auto",
+    ).eval()
 tokenizer = AutoTokenizer.from_pretrained(config.model_path)
 print(f"model's generation config: {model.generation_config}")
 if "llama" in config.model_path:

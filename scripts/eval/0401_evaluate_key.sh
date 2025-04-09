@@ -8,7 +8,7 @@
 #SBATCH -e logs/slurm_benchmark_key/%j_%A_%a.err
 #SBATCH --mail-user=mufan@cs.unc.edu
 #SBATCH --mail-type=FAIL
-#SBATCH --array=2-3
+#SBATCH --array=0-5%2
 
 set -ex
 
@@ -19,7 +19,7 @@ model_paths=(
     "/n/home08/zkong/mufan/tmp/moebench/open-instruct/output/0307_key_olmo"
     "/n/home08/zkong/mufan/tmp/moebench/key/LLaMA-Factory/saves/0317_qwen_1.5b_key/full"
     "/n/home08/zkong/mufan/tmp/moebench/key/LLaMA-Factory/saves/0317_llama3_1b_key/full"
-    "/n/home08/zkong/mufan/tmp/moebench/key/LLaMA-Factory/saves/0317_llama3_3b_key/full/checkpoint-20000"
+    "/n/home08/zkong/mufan/tmp/moebench/key/LLaMA-Factory/saves/0317_llama3_3b_key/full"
     "/n/home08/zkong/mufan/tmp/moebench/open-instruct/output/0319_key_llama1b"
     "/n/home08/zkong/mufan/tmp/moebench/open-instruct/output/0319_key_olmo7b/"
 )

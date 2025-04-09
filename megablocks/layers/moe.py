@@ -442,7 +442,7 @@ class ParallelMLP(torch.nn.Module):
 
         # Compute the experts.
         x, tokens_per_expert = self.forward_fn(x, expert_weights, top_experts)
-        if self.training and self.args.moe_loss_weight > 0:
+        if self.training:
             save_load_balancing_loss((tokens_per_expert, scores, logits))
         x = x.view(in_shape)
         if self.bias is not None:
@@ -499,17 +499,22 @@ class ParallelMLP(torch.nn.Module):
 
 
 class MoE(torch.nn.Module):
-
     def __init__(
         self,
         args: Arguments,
         random_router: bool = False,
         prune_list: None | torch.Tensor = None,
+        bias_u: float | None = None,
+        bias_update_step: int | None = None,
     ):
         super(MoE, self).__init__()
 
         # Token router.
-        self.router = router.LearnedRouter(args)
+        self.router = router.LearnedRouter(
+            args,
+            bias_u=bias_u,
+            bias_update_step=bias_update_step,
+        )
 
         # Expert computation helper.
         self.experts = self._init_experts_mlp(args)

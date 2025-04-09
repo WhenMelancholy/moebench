@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 
 from megablocks.layers import common
 from megablocks.layers.arguments import Arguments
@@ -22,7 +23,12 @@ _uniform_expert_assignment = _UniformExpertAssignment.apply
 
 class LearnedRouter(torch.nn.Module):
 
-    def __init__(self, args: Arguments):
+    def __init__(
+        self,
+        args: Arguments,
+        bias_u=None,
+        bias_update_step=None,
+    ):
         super().__init__()
         self.args = args
 
@@ -40,6 +46,20 @@ class LearnedRouter(torch.nn.Module):
         )
         args.init_method(self.layer.weight)
 
+        self.bias_u = bias_u
+        if self.bias_u:
+            self.bias = nn.Parameter(
+                torch.zeros(args.moe_num_experts),
+                requires_grad=False,
+            )
+
+            assert (
+                bias_update_step is not None
+            ), "Gradient accumulation steps must be provided for bias update."
+            self.ci_buffer = None
+            self.bias_update_step = bias_update_step
+            self.accum_steps = 0
+
     def jitter(self, x):
         low = 1.0 - self.args.moe_jitter_eps
         high = 1.0 + self.args.moe_jitter_eps
@@ -47,6 +67,14 @@ class LearnedRouter(torch.nn.Module):
         return low + noise * (high - low)
 
     def _top_k(self, scores):
+        if self.bias_u is not None:
+            _, selected_experts = torch.topk(
+                scores + self.bias.unsqueeze(0),
+                self.args.moe_top_k,
+                dim=-1,
+            )
+            scores = scores.gather(-1, selected_experts)
+            return scores, selected_experts
         if self.args.moe_top_k == 1:
             return scores.max(dim=-1, keepdim=True)
         return torch.topk(scores, self.args.moe_top_k, dim=-1)
@@ -73,6 +101,10 @@ class LearnedRouter(torch.nn.Module):
                 prune_list = prune_list.to(logits.device)
                 logits[..., prune_list] = float("-inf")
             scores = logits.softmax(dim=-1)  # [batch_size, seq_len, num_experts]
+            if self.bias_u != None:
+                raise NotImplementedError(
+                    "Bias update is not implemented for expert choice"
+                )
             expert_weights, expert_indices = torch.topk(
                 scores.transpose(1, 2),
                 (capacity * sq) // self.args.moe_num_experts,
@@ -90,6 +122,10 @@ class LearnedRouter(torch.nn.Module):
                 prune_list = prune_list.to(logits.device)
                 logits[..., prune_list] = float("-inf")
             scores = logits.softmax(dim=-1)
+            if self.bias_u != None:
+                raise NotImplementedError(
+                    "Bias update is not implemented for expert choice grouped"
+                )
             expert_weights, expert_indices = torch.topk(
                 scores.transpose(0, 1),
                 (capacity * bs * sq) // self.args.moe_num_experts,
@@ -112,6 +148,31 @@ class LearnedRouter(torch.nn.Module):
                 dim=-1,
                 keepdim=True,
             )
+
+        # ========================= 分布式更新 bias =========================
+        if self.bias_u != None and self.training:
+            local_ci = torch.bincount(
+                expert_indices.flatten(),
+                minlength=self.args.moe_num_experts,
+            ).float()
+            if torch.distributed.is_available() and torch.distributed.is_initialized():
+                torch.distributed.all_reduce(
+                    local_ci,
+                    op=torch.distributed.ReduceOp.SUM,
+                )
+            if self.ci_buffer is None:
+                self.ci_buffer = local_ci
+            else:
+                self.ci_buffer += local_ci
+            self.accum_steps += 1
+            if self.accum_steps == self.bias_update_step:
+                aggregated_ci = self.ci_buffer
+                global_mean = aggregated_ci.mean()
+                delta_bias = (global_mean - aggregated_ci).sign()
+                self.bias.data = self.bias.data + self.bias_u * delta_bias
+                self.ci_buffer = None
+                self.accum_steps = 0
+        # ==================================================================
 
         expert_indices = (
             _uniform_expert_assignment(expert_indices, self.args.moe_num_experts)

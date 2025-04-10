@@ -8,7 +8,7 @@
 #SBATCH -e logs/slurm_benchmark_pretrain/%j_%A_%a.err
 #SBATCH --mail-user=mufan@cs.unc.edu
 #SBATCH --mail-type=FAIL
-#SBATCH --array=8-23%4
+#SBATCH --array=23-23%4
 set -ex
 
 cd /n/home08/zkong/mufan/tmp/moebench/OLMo
@@ -47,7 +47,7 @@ mkdir -p results/baseline
 mkdir -p results/random
 mkdir -p results/prune
 
-model_dir=${model_dirs[$SLURM_ARRAY_TASK_ID - 1]}
+model_dir=${model_dirs[$SLURM_ARRAY_TASK_ID]}
 CUDA_VISIBLE_DEVICES=0 lm_eval --model hf \
     --model_args pretrained=${model_dir},trust_remote_code=True,random_router=False,save_router_logits="${model_dir}/baseline.pt" \
     --tasks winogrande,mmlu,piqa,arc_challenge,arc_easy,truthfulqa_mc1,truthfulqa_mc2,truthfulqa_gen,nq_open \

@@ -8,7 +8,7 @@
 #SBATCH -e logs/slurm_pretrain_auxfree/%A_%a_%j.err
 #SBATCH --mail-user=mufan@cs.unc.edu
 #SBATCH --mail-type=FAIL
-#SBATCH --array=0-7%4
+#SBATCH --array=6%4
 
 set -ex
 

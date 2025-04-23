@@ -222,6 +222,12 @@ class FlatArguments:
         default=2e-5,
         metadata={"help": "The initial learning rate for AdamW optimizer."},
     )
+    router_learning_rate: float = field(
+        default=None,
+        metadata={
+            "help": "The learning rate for router parameters. If None, use learning_rate."
+        },
+    )
     logging_steps: Optional[int] = field(
         default=None,
         metadata={
@@ -670,12 +676,32 @@ def main(args: FlatArguments):
     # Optimizer
     # Split weights in two groups, one with weight decay and the other not.
     no_decay = ["bias", "layer_norm.weight"]
+    if args.router_learning_rate is None:
+        args.router_learning_rate = args.learning_rate
     optimizer_grouped_parameters = [
         {
             "params": [
                 p
                 for n, p in model.named_parameters()
-                if not any(nd in n for nd in no_decay)
+                if (".gate." in n) and (not any(nd in n for nd in no_decay))
+            ],
+            "lr": args.router_learning_rate,
+            "weight_decay": args.weight_decay,
+        },
+        {
+            "params": [
+                p
+                for n, p in model.named_parameters()
+                if (".gate." in n) and (any(nd in n for nd in no_decay))
+            ],
+            "lr": args.router_learning_rate,
+            "weight_decay": 0.0,
+        },
+        {
+            "params": [
+                p
+                for n, p in model.named_parameters()
+                if (".gate." not in n) and (not any(nd in n for nd in no_decay))
             ],
             "weight_decay": args.weight_decay,
         },
@@ -683,7 +709,7 @@ def main(args: FlatArguments):
             "params": [
                 p
                 for n, p in model.named_parameters()
-                if any(nd in n for nd in no_decay)
+                if (".gate." not in n) and (any(nd in n for nd in no_decay))
             ],
             "weight_decay": 0.0,
         },
@@ -855,12 +881,14 @@ def main(args: FlatArguments):
         if freeze_strategy != "none":
             if freeze_strategy == "router":
                 for name, param in model.named_parameters():
+                    # exactly match the gate module since there is gate_proj which we do not want to freeze
                     if ".gate." in name:
                         param.requires_grad = False
                         logger.info(f"Freezing {name}")
             elif freeze_strategy == "expert":
                 for name, param in model.named_parameters():
-                    if ".experts." in name:
+                    # match the expert module since the name may be shared expert
+                    if "expert" in name:
                         param.requires_grad = False
                         logger.info(f"Freezing {name}")
             else:

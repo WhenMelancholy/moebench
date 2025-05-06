@@ -7,6 +7,11 @@ from megablocks.layers import common, dmlp_registry, moe, mpu
 from megablocks.layers.arguments import Arguments
 
 
+def save_load_balancing_loss(loss):
+    global _LOAD_BALANCING_LOSS
+    _LOAD_BALANCING_LOSS.append(loss)
+
+
 def promote_scalar(x):
     return x.view(1) if not len(x.size()) else x
 

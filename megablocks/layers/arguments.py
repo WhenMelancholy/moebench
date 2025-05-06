@@ -34,6 +34,7 @@ class Arguments:
     moe_lbl_in_fp32 : bool = False
     moe_expert_choice: bool = False
     moe_expert_choice_grouped: bool = False
+    moe_router_type: str = 'token'
 
     # Parallelism arguments.
     moe_expert_model_parallelism : bool = False

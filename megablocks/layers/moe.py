@@ -444,6 +444,8 @@ class ParallelMLP(torch.nn.Module):
         x, tokens_per_expert = self.forward_fn(x, expert_weights, top_experts)
         if self.training and self.args.moe_loss_weight > 0:
             save_load_balancing_loss((tokens_per_expert, scores, logits))
+        elif self.training:
+            save_load_balancing_loss((tokens_per_expert, scores))
         x = x.view(in_shape)
         if self.bias is not None:
             if self.args.return_bias:
@@ -466,7 +468,7 @@ class ParallelMLP(torch.nn.Module):
         x = z.reshape((bs, sl, hs))
         return x
 
-    def forward_ec(self, x, scores, expert_weights, top_experts):
+    def forward_ec(self, x, scores, logits, expert_weights, top_experts):
         """
         Expert choice forward func
         sl = sequence length
@@ -495,6 +497,16 @@ class ParallelMLP(torch.nn.Module):
         )
         x_e = x_e.reshape(num_experts, bs, k, hs).permute(1, 0, 2, 3)
         x_out = torch.einsum("bek...,bsek->bs...", x_e, combine_array)
+        if self.training:
+            tokens_per_expert = torch.full(
+                (num_experts,), bs * k, dtype=torch.int32, device=x.device
+            )
+            save_load_balancing_loss((tokens_per_expert, scores))
+        x_out = x_out.view(bs, sl, hs)
+        if self.bias is not None:
+            if self.args.return_bias:
+                return x_out, self.bias
+            return x_out + self.bias
         return x_out
 
 
@@ -525,14 +537,14 @@ class MoE(torch.nn.Module):
     def _init_experts_mlp(self, args: Arguments):
         return ParallelMLP(args)
 
-    def forward(self, x, output_router_logits=False):
+    def forward(self, x, output_router_logits=False, word_ids=None, sentence_ids=None):
         # NOTE: If we're going to cast the activations to lower precision
         # do it before we permute the tokens to save bandwidth.
         x = common.cast_if_autocast_enabled(x)
 
         # Compute the expert scores and assignments.
         scores, logits, expert_weights, top_experts = self.router(
-            x, self.random_router, self.prune_list
+            x, self.random_router, self.prune_list, word_ids, sentence_ids
         )
 
         # Compute the experts.

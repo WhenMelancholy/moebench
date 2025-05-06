@@ -8,7 +8,7 @@
 #SBATCH -e logs/slurm_sft_lima_safe_deepseek_lr/%j_%A_%a.err
 #SBATCH --mail-user=mufan@cs.unc.edu
 #SBATCH --mail-type=FAIL
-#SBATCH --array=1,2,3,4,0%2
+#SBATCH --array=2,3,4%1
 set -eo pipefail
 set -x
 

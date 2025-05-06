@@ -26,21 +26,21 @@ export CUDA_VISIBLE_DEVICES=0,1,2,3
 echo "Training llama model ${MODEL_SIZE} using $NUM_GPUS GPUs, $BATCH_SIZE_PER_GPU batch size per GPU, $GRADIENT_ACC_STEPS gradient accumulation steps"
 
 settings=(
-    "none"
-    "expert"
-    "router"
-    "expert_router"
-    "router_expert"
-    "expert_none"
-    "router_none"
-    "none_expert"
-    "none_router"
-    "expert_expert_router_router"
-    "router_router_expert_expert"
-    "expert_expert_none_none"
-    "router_router_none_none"
-    "none_none_expert_expert"
-    "none_none_router_router"
+    "none"                        # 0
+    "expert"                      # 1
+    "router"                      # 2
+    "expert_router"               # 3
+    "router_expert"               # 4
+    "expert_none"                 # 5
+    "router_none"                 # 6
+    "none_expert"                 # 7
+    "none_router"                 # 8
+    "expert_expert_router_router" # 9
+    "router_router_expert_expert" # 10
+    "expert_expert_none_none"     # 11
+    "router_router_none_none"     # 12
+    "none_none_expert_expert"     # 13
+    "none_none_router_router"     # 14
 )
 
 cd /n/home08/zkong/mufan/tmp/moebench/open-instruct

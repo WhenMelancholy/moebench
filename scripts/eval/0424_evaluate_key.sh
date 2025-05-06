@@ -10,10 +10,11 @@
 #SBATCH --mail-type=FAIL
 #SBATCH --array=6-6
 
+# SLURM_ARRAY_TASK_ID=0 bash 0424_evaluate_key.sh
 set -ex
 
 cd /n/home08/zkong/mufan/tmp/moebench/open-instruct/
-[ -z "$SLURM_ARRAY_TASK_ID" ] && SLURM_ARRAY_TASK_ID=7
+[ -z "$SLURM_ARRAY_TASK_ID" ] && SLURM_ARRAY_TASK_ID=4
 
 model_paths=(
     "/n/home08/zkong/mufan/tmp/moebench/open-instruct/output/0307_key_olmo"                     #0
@@ -25,6 +26,8 @@ model_paths=(
     "/n/home08/zkong/mufan/tmp/moebench/open-instruct/output/0319_key_cache_olmo"               #6
     "/n/home08/zkong/mufan/tmp/moebench/open-instruct/output/0424_key_cache_key_olmo/step_3000" #7
     "/n/home08/zkong/mufan/tmp/moebench/open-instruct/output/0424_key_cache_olmo/step_3000"     #8
+    "/n/home08/zkong/mufan/tmp/moebench/open-instruct/output/0424_key_cache_key_olmo/step_6000" #9
+    "/n/home08/zkong/mufan/tmp/moebench/open-instruct/output/0424_key_cache_olmo/step_6000"     #10
 )
 input_path="/n/home08/zkong/mufan/tmp/moebench/key/llama-cookbook/data/cache/across_participant_across_sentence_test.jsonl"
 model_path=${model_paths[$SLURM_ARRAY_TASK_ID]}

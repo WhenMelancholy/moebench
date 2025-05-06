@@ -513,6 +513,10 @@ class ModelConfig(BaseConfig):
     The capacity factor to use in the MoE block. Only applies if not using dMoE.
     """
 
+    moe_expert_choice: Optional[bool] = False
+
+    moe_router_type: Optional[str] = "token"
+
     scale_emb_init: bool = False
     """
     If ``True``, embeddings are scaled up by ``sqrt(d_model)`` during initialization.
@@ -1384,6 +1388,8 @@ def config_to_moe_args(config: ModelConfig) -> Dict[str, Any]:
         "moe_top_k": config.moe_top_k,
         "moe_capacity_factor": config.moe_capacity_factor,
         "moe_loss_weight": config.moe_loss_weight,
+        "moe_expert_choice": config.moe_expert_choice,
+        "moe_router_type": config.moe_router_type,
         "device": config.init_device,
         # Handled by FSDP
         "bf16": False,

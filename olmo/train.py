@@ -502,7 +502,10 @@ class Trainer:
                 upload_to=remote_checkpoint_dir,
             )
         except FileExistsError:
-            raise OLMoConfigurationError(
+            # raise OLMoConfigurationError(
+            #     f"Checkpoint for step {self.global_step} already exists, use --save-overwrite to overwrite it"
+            # )
+            print(
                 f"Checkpoint for step {self.global_step} already exists, use --save-overwrite to overwrite it"
             )
 
@@ -752,6 +755,8 @@ class Trainer:
             attention_bias=batch.get("attention_bias"),
             doc_lens=batch.get("doc_lens"),
             max_doc_lens=batch.get("max_doc_lens"),
+            word_ids=batch.get("word_ids"),
+            sentence_ids=batch.get("sentence_ids"),
         ).logits
         logits_for_loss = logits[..., :-1, :].contiguous()
         # shape: (batch_size * seq_len, vocab_size)

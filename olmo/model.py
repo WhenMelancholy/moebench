@@ -6,6 +6,7 @@ Adapted from
 
 from __future__ import annotations
 
+import atexit
 import logging
 import math
 import os
@@ -59,6 +60,7 @@ else:
 
 try:
     from megablocks.layers.dmoe import dMoE
+    from megablocks.layers.moe import MoE
 
     # from megablocks.layers.moe import MoE as MoE_old # we will not support MoE for simplicity
 except ImportError:
@@ -761,6 +763,8 @@ class OLMoEBlock(OLMoBlock):
         use_cache: bool = False,
         max_doc_len: Optional[int] = None,
         cu_doc_lens: Optional[torch.Tensor] = None,
+        word_ids: Optional[torch.Tensor] = None,
+        sentence_ids: Optional[torch.Tensor] = None,
         output_router_logits: bool = False,
     ) -> Tuple[torch.Tensor, Optional[Tuple[torch.Tensor, torch.Tensor]]]:
         # Get query, key, value projections.
@@ -823,7 +827,7 @@ class OLMoEBlock(OLMoBlock):
         og_x = x
 
         if self.config.norm_after:
-            x = self.ffn(x, output_router_logits=output_router_logits)
+            x = self.ffn(x, output_router_logits=output_router_logits, word_ids=word_ids, sentence_ids=sentence_ids)
             if output_router_logits:
                 x, router_logits = x
             if self._activation_checkpoint_fn is not None:
@@ -839,7 +843,7 @@ class OLMoEBlock(OLMoBlock):
             else:
                 x = self.ff_norm(x)
             # Activation checkpointing for the MoE FFN is not supported
-            x = self.ffn(x, output_router_logits=output_router_logits)
+            x = self.ffn(x, output_router_logits=output_router_logits, word_ids=word_ids, sentence_ids=sentence_ids)
             if output_router_logits:
                 x, router_logits = x
                 return og_x + self.dropout(x), cache, router_logits
@@ -1288,6 +1292,7 @@ class OLMo(nn.Module):
         self.save_router_logits = config.asdict().get("save_router_logits", None)
         if self.save_router_logits is not None:
             self.router_logits = ()
+            atexit.register(self.save_router_data)
         self.prune_experts = config.asdict().get("prune_experts", None)
         self.prune_expert_count = config.asdict().get(
             "prune_expert_count", config.moe_top_k + int(config.moe_shared_expert)
@@ -1356,7 +1361,7 @@ class OLMo(nn.Module):
             get_causal_attention_bias(self.__cache, config.max_sequence_length, _non_meta_init_device(config))
             self.get_alibi_attention_bias(config.max_sequence_length, _non_meta_init_device(config))
 
-    def __del__(self, *args, **kwargs):
+    def save_router_data(self, *args, **kwargs):
         if self.save_router_logits is not None:
             new_logits = []
             for i in range(self.config.n_layers):
@@ -1481,6 +1486,8 @@ class OLMo(nn.Module):
         output_hidden_states: Optional[bool] = None,
         doc_lens: Optional[torch.Tensor] = None,
         max_doc_lens: Optional[Sequence[int]] = None,
+        word_ids: torch.LongTensor = None,
+        sentence_ids: torch.LongTensor = None,
     ) -> OLMoOutput:
         """
         :param input_ids: A tensor of shape `(batch_size, seq_len)`.
@@ -1629,6 +1636,8 @@ class OLMo(nn.Module):
                         use_cache=use_cache,
                         max_doc_len=max_doc_len,
                         cu_doc_lens=cu_doc_lens,
+                        word_ids=word_ids,
+                        sentence_ids=sentence_ids,
                         output_router_logits=self.save_router_logits is not None,
                     )
                 if self.save_router_logits is not None:

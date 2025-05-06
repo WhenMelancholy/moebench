@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
 from torch.utils.data import DataLoader, DistributedSampler
+from transformers import AutoTokenizer
 
 from ..aliases import PathOrStr
 from ..config import DataConfig, TrainConfig
@@ -10,8 +11,9 @@ from ..torch_util import barrier, get_global_rank, get_world_size
 from .collator import DataCollator
 from .iterable_dataset import IterableDataset
 from .memmap_dataset import MemMapDataset
+from .jsonl_dataset import JsonlDataset
 
-__all__ = ["MemMapDataset", "DataCollator", "IterableDataset", "build_eval_dataloader", "build_train_dataloader"]
+__all__ = ["MemMapDataset", "JsonlDataset", "DataCollator", "IterableDataset", "build_eval_dataloader", "build_train_dataloader"]
 
 
 def build_memmap_dataset(
@@ -54,7 +56,11 @@ def build_eval_dataloader(
     batch_size: int,
     shuffle: bool = True,
 ) -> DataLoader:
-    dataset = build_memmap_dataset(train_config, data_config, include_instance_metadata=True)
+    # dataset = build_memmap_dataset(train_config, data_config, include_instance_metadata=True)
+    tokenizer = AutoTokenizer.from_pretrained("allenai/gpt-neox-olmo-dolma-v1_5")
+    tokenizer.pad_token_id = train_config.model.pad_token_id
+    tokenizer.eos_token_id = train_config.model.eos_token_id
+    dataset = JsonlDataset(train_config.data.paths, tokenizer=tokenizer, text_key="text", max_length=train_config.model.max_sequence_length)
     collator = DataCollator(pad_direction=data_config.pad_direction, pad_token_id=train_config.model.pad_token_id)
     if data_config.drop_last:
         # Make sure batch size is small enough.
@@ -95,9 +101,13 @@ def build_train_dataloader(
     collator = DataCollator(
         pad_direction=train_config.data.pad_direction, pad_token_id=train_config.model.pad_token_id
     )
-    dataset = build_memmap_dataset(
-        train_config, train_config.data, include_instance_metadata=include_instance_metadata
-    )
+    # dataset = build_memmap_dataset(
+    #     train_config, train_config.data, include_instance_metadata=include_instance_metadata
+    # )
+    tokenizer = AutoTokenizer.from_pretrained("allenai/gpt-neox-olmo-dolma-v1_5")
+    tokenizer.pad_token_id = train_config.model.pad_token_id
+    tokenizer.eos_token_id = train_config.model.eos_token_id
+    dataset = JsonlDataset(train_config.data.paths, tokenizer=tokenizer, text_key="text", max_length=train_config.model.max_sequence_length)
     work_dir = Path(train_config.save_folder) / "train_data"
     if get_global_rank() == 0:
         if work_dir.is_dir() and not train_config.save_overwrite:

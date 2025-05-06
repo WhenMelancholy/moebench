@@ -32,6 +32,8 @@ class DataCollator:
         all_instance_mask = []
         all_doc_lens = []
         all_max_doc_lens = []
+        all_word_ids = []
+        all_sentence_ids = []
         max_docs = max((len(x["doc_lens"]) if isinstance(x, dict) and "doc_lens" in x else 0 for x in items))
 
         for x in items:
@@ -114,6 +116,22 @@ class DataCollator:
                 all_doc_lens.append(F.pad(doc_lens, doc_pad_shape, value=0))
                 all_max_doc_lens.append(int(doc_lens.max()))
 
+            # Process word_ids.
+            if "word_ids" in x:
+                word_ids = x["word_ids"]
+                if not isinstance(word_ids, torch.Tensor):
+                    word_ids = torch.tensor(word_ids, dtype=torch.long)
+                # Use -1 as the padding value for word_ids.
+                all_word_ids.append(F.pad(word_ids, pad_shape, value=-1))
+
+            # Process sentence_ids.
+            if "sentence_ids" in x:
+                sentence_ids = x["sentence_ids"]
+                if not isinstance(sentence_ids, torch.Tensor):
+                    sentence_ids = torch.tensor(sentence_ids, dtype=torch.long)
+                # Use -1 as the padding value for sentence_ids.
+                all_sentence_ids.append(F.pad(sentence_ids, pad_shape, value=-1))
+
             # Metadata.
             metadata = x.get("metadata") if isinstance(x, dict) else None
             if metadata is not None:
@@ -134,6 +152,10 @@ class DataCollator:
             out["doc_lens"] = torch.stack(all_doc_lens)
         if all_max_doc_lens:
             out["max_doc_lens"] = all_max_doc_lens
+        if all_word_ids:
+            out["word_ids"] = torch.stack(all_word_ids)
+        if all_sentence_ids:
+            out["sentence_ids"] = torch.stack(all_sentence_ids)
         if all_metadata:
             out["metadata"] = all_metadata
 

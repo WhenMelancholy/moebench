@@ -4,20 +4,20 @@
 # Licensed under the MIT license.
 
 import argparse
+import logging
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import StepLR
+from torchvision import datasets, transforms
 
-from tutel import system
-from tutel import moe
-from tutel import net
+from tutel import moe, net, system
 
-import logging
-
-penv = system.init_data_model_parallel(backend='nccl' if torch.cuda.is_available() else 'gloo')
+penv = system.init_data_model_parallel(
+    backend="nccl" if torch.cuda.is_available() else "gloo"
+)
 
 
 class Net(nn.Module):
@@ -29,16 +29,24 @@ class Net(nn.Module):
 
         if self.use_moe:
             self.moe_ffn = moe.moe_layer(
-                gate_type = {'type': 'top', 'k': 1, 'capacity_factor': 0, 'gate_noise': 1.0},
-                experts = {'type': 'ffn',
-                    'num_experts_per_device': 1,
-                    'hidden_size_per_expert': 128,
-                    'output_dim': 10,
-                    'activation_fn': lambda x: self.dropout2(F.relu(x))
+                gate_type={
+                    "type": "top",
+                    "k": 1,
+                    "capacity_factor": 0,
+                    "gate_noise": 1.0,
                 },
-                model_dim = 9216,
-                seeds = (1, penv.global_rank + 1),
-                scan_expert_func = lambda name, param: setattr(param, 'skip_allreduce', True),
+                experts={
+                    "type": "ffn",
+                    "num_experts_per_device": 1,
+                    "hidden_size_per_expert": 128,
+                    "output_dim": 10,
+                    "activation_fn": lambda x: self.dropout2(F.relu(x)),
+                },
+                model_dim=9216,
+                seeds=(1, penv.global_rank + 1),
+                scan_expert_func=lambda name, param: setattr(
+                    param, "skip_allreduce", True
+                ),
             )
         else:
             torch.manual_seed(1)
@@ -81,7 +89,7 @@ def train(args, model, device, train_loader, optimizer, epoch):
         loss.backward()
 
         for p in model.parameters():
-            if not hasattr(p, 'skip_allreduce') and p.grad is not None:
+            if not hasattr(p, "skip_allreduce") and p.grad is not None:
                 p.grad = net.simple_all_reduce(p.grad)
 
         optimizer.step()
@@ -91,10 +99,18 @@ def train(args, model, device, train_loader, optimizer, epoch):
         total_items = int(output.size(0))
 
         if batch_idx % args.log_interval == 0:
-            penv.dist_print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\tTrain Accuracy: {}/{} ({:.2f}%)'.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), loss.item(),
-                correct, total_items, 100.0 * correct / total_items))
+            penv.dist_print(
+                "Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\tTrain Accuracy: {}/{} ({:.2f}%)".format(
+                    epoch,
+                    batch_idx * len(data),
+                    len(train_loader.dataset),
+                    100.0 * batch_idx / len(train_loader),
+                    loss.item(),
+                    correct,
+                    total_items,
+                    100.0 * correct / total_items,
+                )
+            )
             if args.dry_run:
                 break
 
@@ -117,76 +133,108 @@ def test(model, device, test_loader):
     for k in correct:
         correct[k] *= 100.0 / len(test_loader.dataset)
 
-    penv.dist_print('\nTest set: Validate Accuracy: (Top-1) {:.2f}%, (Top-2) {:.2f}%, (Top-8) {:.2f}%\n'.format(
-        correct[1], correct[2], correct[8]
-    ))
+    penv.dist_print(
+        "\nTest set: Validate Accuracy: (Top-1) {:.2f}%, (Top-2) {:.2f}%, (Top-8) {:.2f}%\n".format(
+            correct[1], correct[2], correct[8]
+        )
+    )
     return max(correct[1], correct[2], correct[8])
 
 
 def main():
-    parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
-    parser.add_argument('--batch-size', type=int, default=64, metavar='N',
-                        help='input batch size for training (default: 64)')
-    parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
-                        help='input batch size for testing (default: 1000)')
-    parser.add_argument('--epochs', type=int, default=20, metavar='N',
-                        help='number of epochs to train')
-    parser.add_argument('--lr', type=float, default=1.0, metavar='LR',
-                        help='learning rate')
-    parser.add_argument('--gamma', type=float, default=0.7, metavar='M',
-                        help='Learning rate step gamma (default: 0.7)')
-    parser.add_argument('--dry-run', action='store_true', default=False,
-                        help='quickly check a single pass')
-    parser.add_argument('--log-interval', type=int, default=10, metavar='N',
-                        help='how many batches to wait before logging training status')
-    parser.add_argument('--no-moe', action='store_true', default=False,
-                        help='if disabling moe layer and using ffn layer instead')
+    parser = argparse.ArgumentParser(description="PyTorch MNIST Example")
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=64,
+        metavar="N",
+        help="input batch size for training (default: 64)",
+    )
+    parser.add_argument(
+        "--test-batch-size",
+        type=int,
+        default=1000,
+        metavar="N",
+        help="input batch size for testing (default: 1000)",
+    )
+    parser.add_argument(
+        "--epochs", type=int, default=20, metavar="N", help="number of epochs to train"
+    )
+    parser.add_argument(
+        "--lr", type=float, default=1.0, metavar="LR", help="learning rate"
+    )
+    parser.add_argument(
+        "--gamma",
+        type=float,
+        default=0.7,
+        metavar="M",
+        help="Learning rate step gamma (default: 0.7)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="quickly check a single pass",
+    )
+    parser.add_argument(
+        "--log-interval",
+        type=int,
+        default=10,
+        metavar="N",
+        help="how many batches to wait before logging training status",
+    )
+    parser.add_argument(
+        "--no-moe",
+        action="store_true",
+        default=False,
+        help="if disabling moe layer and using ffn layer instead",
+    )
     args = parser.parse_args()
 
     use_cuda = torch.cuda.is_available()
     device = penv.local_device
     torch.manual_seed(1)
 
-    train_kwargs = {'batch_size': args.batch_size}
-    test_kwargs = {'batch_size': args.test_batch_size}
+    train_kwargs = {"batch_size": args.batch_size}
+    test_kwargs = {"batch_size": args.test_batch_size}
     if use_cuda:
-        cuda_kwargs = {'num_workers': 1,
-                       'pin_memory': True,
-                       'shuffle': True}
+        cuda_kwargs = {"num_workers": 1, "pin_memory": True, "shuffle": True}
         train_kwargs.update(cuda_kwargs)
         test_kwargs.update(cuda_kwargs)
 
-    transform=transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,))
-    ])
+    transform = transforms.Compose(
+        [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
+    )
 
-    if int(torch.os.environ.get('LOCAL_RANK', 0)) == 0:
-        dataset1 = Net.DATASET_TARGET('/tmp/data', train=True, download=True,
-                           transform=transform)
-        dataset2 = Net.DATASET_TARGET('/tmp/data', train=False,
-                           transform=transform)
+    if int(torch.os.environ.get("LOCAL_RANK", 0)) == 0:
+        dataset1 = Net.DATASET_TARGET(
+            "/tmp/data", train=True, download=True, transform=transform
+        )
+        dataset2 = Net.DATASET_TARGET("/tmp/data", train=False, transform=transform)
         net.barrier()
     else:
         net.barrier()
-        dataset1 = Net.DATASET_TARGET('/tmp/data', train=True, download=False,
-                           transform=transform)
-        dataset2 = Net.DATASET_TARGET('/tmp/data', train=False,
-                           transform=transform)
+        dataset1 = Net.DATASET_TARGET(
+            "/tmp/data", train=True, download=False, transform=transform
+        )
+        dataset2 = Net.DATASET_TARGET("/tmp/data", train=False, transform=transform)
     net.barrier()
 
-    train_loader = torch.utils.data.DataLoader(dataset1,**train_kwargs)
+    train_loader = torch.utils.data.DataLoader(dataset1, **train_kwargs)
     test_loader = torch.utils.data.DataLoader(dataset2, **test_kwargs)
 
     model = Net(use_moe=not args.no_moe).to(device)
     optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
 
-    penv.dist_print('Model = %s.\nShared parameter items = %d (as replicas), expert parameter items = %d (as local x %d devices).' % (
-        model,
-        len([x for x in model.parameters() if not hasattr(x, 'skip_allreduce')]),
-        len([x for x in model.parameters() if hasattr(x, 'skip_allreduce')]),
-        penv.global_size,
-    ))
+    penv.dist_print(
+        "Model = %s.\nShared parameter items = %d (as replicas), expert parameter items = %d (as local x %d devices)."
+        % (
+            model,
+            len([x for x in model.parameters() if not hasattr(x, "skip_allreduce")]),
+            len([x for x in model.parameters() if hasattr(x, "skip_allreduce")]),
+            penv.global_size,
+        )
+    )
 
     scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
     torch.manual_seed(penv.global_rank + 1)
@@ -197,8 +245,8 @@ def main():
         peak_accuracy = max(peak_accuracy, test(model, device, test_loader))
         scheduler.step()
 
-    penv.dist_print('Peak validation accuracy = {:.2f}%'.format(peak_accuracy))
+    penv.dist_print("Peak validation accuracy = {:.2f}%".format(peak_accuracy))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

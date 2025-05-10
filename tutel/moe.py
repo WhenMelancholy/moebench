@@ -2,9 +2,15 @@
 # Licensed under the MIT license.
 
 
+from .impls.fast_dispatch import (
+    extract_critical,
+    fast_decode,
+    fast_dispatcher,
+    fast_encode,
+)
+
 # Low-level Ops
 from .jit_kernels.gating import fast_cumsum_sub_one
-from .impls.fast_dispatch import fast_dispatcher, extract_critical, fast_encode, fast_decode
 
 top_k_routing = extract_critical
 

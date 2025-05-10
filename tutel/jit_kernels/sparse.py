@@ -2,23 +2,29 @@
 # Licensed under the MIT license.
 
 import torch
+
 from ..impls.jit_compiler import JitCompiler
 
 
 def get_kernel_dtype(param_dtype):
-  if param_dtype == torch.float16:
-      return '__half2'
-  elif param_dtype == torch.float32:
-      return 'float'
-  else:
-      raise Exception("Unrecognized data type: %s" % param_dtype)
+    if param_dtype == torch.float16:
+        return "__half2"
+    elif param_dtype == torch.float32:
+        return "float"
+    else:
+        raise Exception("Unrecognized data type: %s" % param_dtype)
 
 
 def create_forward(param_dtype, is_cuda=True):
-  if not is_cuda:
-    return JitCompiler.generate_cpu_kernel(kernel_type=0)
+    if not is_cuda:
+        return JitCompiler.generate_cpu_kernel(kernel_type=0)
 
-  return JitCompiler.generate_kernel({'dtype': get_kernel_dtype(param_dtype), 'IS_FLOAT': 1 if param_dtype == torch.float32 else 0}, '''
+    return JitCompiler.generate_kernel(
+        {
+            "dtype": get_kernel_dtype(param_dtype),
+            "IS_FLOAT": 1 if param_dtype == torch.float32 else 0,
+        },
+        """
     #define __dtype @dtype@
 
     extern "C" __global__ __launch_bounds__(1024) void execute(__dtype* __restrict__ gates1_s, int* __restrict__ indices1_s, int* __restrict__ locations1_s, __dtype* __restrict__ reshaped_input, __dtype* __restrict__ dispatched_input, int samples, int hidden, int capacity) {
@@ -32,14 +38,20 @@ def create_forward(param_dtype, is_cuda=True):
                   dispatched_input[(indices1_s[i] * capacity + locations1_s[i]) * (hidden) + j] = gates1_s[i] * reshaped_input[i * (hidden) + j];
           }
     }
-  ''')
+  """,
+    )
 
 
 def create_backward_data(param_dtype, is_cuda=True):
-  if not is_cuda:
-    return JitCompiler.generate_cpu_kernel(kernel_type=1)
+    if not is_cuda:
+        return JitCompiler.generate_cpu_kernel(kernel_type=1)
 
-  return JitCompiler.generate_kernel({'dtype': get_kernel_dtype(param_dtype), 'IS_FLOAT': 1 if param_dtype == torch.float32 else 0}, '''
+    return JitCompiler.generate_kernel(
+        {
+            "dtype": get_kernel_dtype(param_dtype),
+            "IS_FLOAT": 1 if param_dtype == torch.float32 else 0,
+        },
+        """
     #define __dtype @dtype@
 
     extern "C" __global__ __launch_bounds__(1024) void execute(__dtype* __restrict__ gates1_s, int* __restrict__ indices1_s, int* __restrict__ locations1_s, __dtype* __restrict__ grad_reshaped_input, __dtype* __restrict__ dispatched_input, int samples, int hidden, int capacity) {
@@ -61,14 +73,20 @@ def create_backward_data(param_dtype, is_cuda=True):
     #endif
           }
     }
-  ''')
+  """,
+    )
 
 
 def create_backward_gate(param_dtype, is_cuda=True):
-  if not is_cuda:
-    return JitCompiler.generate_cpu_kernel(kernel_type=2)
+    if not is_cuda:
+        return JitCompiler.generate_cpu_kernel(kernel_type=2)
 
-  return JitCompiler.generate_kernel({'dtype': get_kernel_dtype(param_dtype), 'IS_FLOAT': 1 if param_dtype == torch.float32 else 0}, '''
+    return JitCompiler.generate_kernel(
+        {
+            "dtype": get_kernel_dtype(param_dtype),
+            "IS_FLOAT": 1 if param_dtype == torch.float32 else 0,
+        },
+        """
   #define __dtype @dtype@
 
   extern "C" __global__ __launch_bounds__(32) void execute(void* __restrict__ grad_gates1_s, int* __restrict__ indices1_s, int* __restrict__ locations1_s, __dtype* __restrict__ reshaped_input, __dtype* __restrict__ dispatched_input, int samples, int hidden, int capacity) {
@@ -131,4 +149,5 @@ def create_backward_gate(param_dtype, is_cuda=True):
   #endif
     }
   }
-  ''')
+  """,
+    )

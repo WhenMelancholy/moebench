@@ -2,11 +2,16 @@
 # Licensed under the MIT license.
 
 import os
+
 import torch
+
 import tutel_custom_kernel
 
-if 'OP_LOADER' not in os.environ:
-    os.environ['OP_LOADER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.')
+if "OP_LOADER" not in os.environ:
+    os.environ["OP_LOADER"] = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "."
+    )
+
 
 def input_to_float8(
     x: torch.Tensor, dim=-1, dtype: torch.dtype = torch.float8_e4m3fn, max_scale=None
@@ -24,4 +29,3 @@ def input_to_float8(
     x_scl_sat.scale_inv = scale.float().reciprocal().squeeze(dim)
     # x_scl_sat.scale_mean = sum_val.squeeze(dim)
     return x_scl_sat
-

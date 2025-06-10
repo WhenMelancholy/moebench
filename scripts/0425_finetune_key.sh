@@ -69,6 +69,6 @@ accelerate launch \
     --no_push_to_hub \
     --no_use_slow_tokenizer \
     --no_try_launch_beaker_eval_jobs \
-    --dataset_mixer_list WhenceFade/0424_key_cache_dynamic_olmoe 1.0 \
+    --dataset_mixer_list XXXX/0424_key_cache_dynamic_olmoe 1.0 \
     --freeze_strategy none \
     --add_bos

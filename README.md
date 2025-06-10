@@ -115,10 +115,3 @@ The [open-instruct/scripts/eval/0501_evaluate_key.sh](open-instruct/scripts/eval
      - Generates multiple prediction sequences using the model's `generate` method. Generation parameters (e.g., `max_new_tokens`, `num_beams`) are configurable within the script.
      - Saves the input, target, and generated predictions in JSONL format to the `output_path`.
 
-## Citation
-
-This work is informed by research in keystroke dynamics and side-channel analysis. If utilizing or adapting this codebase for research in related domains, please consider citing relevant academic literature. For instance, studies such as:
-
-*   "Keylogging Side-Channel Analysis on Social Messaging Applications via Tapping Activity Inference" (based on the contextual PDF provided).
-
-It is recommended to also include citations pertinent to the specific datasets or methodologies employed in your project.

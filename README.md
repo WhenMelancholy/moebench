@@ -22,13 +22,13 @@ The codebase leverages `accelerate` for distributed training and includes tools 
 
 ## Model Fine-tuning
 
-Model fine-tuning is orchestrated primarily through the [open-instruct/scripts/0601_finetune_key_four.sh](open-instruct/scripts/0601_finetune_key_four.sh) script, which in turn utilizes [open-instruct/open_instruct/finetune.py](open-instruct/open_instruct/finetune.py) to manage the training process.
+Model fine-tuning is orchestrated primarily through the [open-instruct/scripts/0425_finetune_key_four.sh](open-instruct/scripts/0425_finetune_key_four.sh) script, which in turn utilizes [open-instruct/open_instruct/finetune.py](open-instruct/open_instruct/finetune.py) to manage the training process.
 
-### 1. Configuring `scripts/0601_finetune_key_four.sh`
+### 1. Configuring `scripts/0425_finetune_key_four.sh`
    - **SLURM Directives**: Adjust the `#SBATCH` directives at the beginning of the script to match your cluster's configuration (e.g., nodes, GPUs, time allocation, memory).
    - **Model Selection**: Modify the `model_names` and `output_suffixs` arrays within the script to specify the base models for fine-tuning and to define corresponding output identifiers.
      ````bash
-     // filepath: open-instruct/scripts/0601_finetune_key_four.sh
+     // filepath: open-instruct/scripts/0425_finetune_key_four.sh
      // ...existing code...
      // Array of model identifiers from Hugging Face or local paths
      model_names=(
@@ -57,11 +57,11 @@ Model fine-tuning is orchestrated primarily through the [open-instruct/scripts/0
 ### 2. Executing the Fine-tuning Process
    Submit the script to the SLURM scheduler:
    ```bash
-   sbatch open-instruct/scripts/0601_finetune_key_four.sh
+   sbatch open-instruct/scripts/0425_finetune_key_four.sh
    ```
    To execute a specific configuration from the `model_names` array (e.g., the first model, at index 0), you can set the `SLURM_ARRAY_TASK_ID` environment variable:
    ```bash
-   SLURM_ARRAY_TASK_ID=0 bash open-instruct/scripts/0601_finetune_key_four.sh
+   SLURM_ARRAY_TASK_ID=0 bash open-instruct/scripts/0425_finetune_key_four.sh
    ```
    This will initiate the training procedure managed by `open_instruct/finetune.py`.
 
@@ -70,13 +70,13 @@ Model fine-tuning is orchestrated primarily through the [open-instruct/scripts/0
 
 ## Generating Predictions and Evaluation
 
-The [open-instruct/scripts/eval/0605_evaluate_key.sh](open-instruct/scripts/eval/0605_evaluate_key.sh) script is used for running evaluations. This script leverages [open-instruct/scripts/eval/0319_evaluate_key.py](open-instruct/scripts/eval/0319_evaluate_key.py) to generate predictions from the fine-tuned models.
+The [open-instruct/scripts/eval/0501_evaluate_key.sh](open-instruct/scripts/eval/0501_evaluate_key.sh) script is used for running evaluations. This script leverages [open-instruct/scripts/eval/0319_evaluate_key.py](open-instruct/scripts/eval/0319_evaluate_key.py) to generate predictions from the fine-tuned models.
 
-### 1. Configuring `scripts/eval/0605_evaluate_key.sh`
+### 1. Configuring `scripts/eval/0501_evaluate_key.sh`
    - **SLURM Directives**: Adjust the `#SBATCH` directives as necessary.
    - **Model Paths**: Update the `model_paths` array to include the paths to your fine-tuned models.
      ````bash
-     // filepath: open-instruct/scripts/eval/0605_evaluate_key.sh
+     // filepath: open-instruct/scripts/eval/0501_evaluate_key.sh
      // ...existing code...
      // Array of paths to the fine-tuned models
      model_paths=(
@@ -88,7 +88,7 @@ The [open-instruct/scripts/eval/0605_evaluate_key.sh](open-instruct/scripts/eval
      ````
    - **Datasets**: The `input_files` array specifies the test datasets. Ensure these files exist and are in JSONL format. The `DATA_DIR` variable points to the base directory for these datasets.
      ````bash
-     // filepath: open-instruct/scripts/eval/0605_evaluate_key.sh
+     // filepath: open-instruct/scripts/eval/0501_evaluate_key.sh
      // ...existing code...
      DATA_DIR="/n/home08/zkong/mufan/tmp/moebench/key/llama-cookbook/data/" // Ensure this path is correct
      input_files=(
@@ -102,7 +102,7 @@ The [open-instruct/scripts/eval/0605_evaluate_key.sh](open-instruct/scripts/eval
 ### 2. Executing the Evaluation
    Submit the script to SLURM:
    ```bash
-   sbatch open-instruct/scripts/eval/0605_evaluate_key.sh
+   sbatch open-instruct/scripts/eval/0501_evaluate_key.sh
    ```
    If using SLURM arrays for dataset selection (as configured with `SLURM_ARRAY_TASK_ID`), the script will iterate through the specified models and datasets.
 

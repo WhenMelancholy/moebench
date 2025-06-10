@@ -52,7 +52,7 @@ Model fine-tuning is orchestrated primarily through the [open-instruct/scripts/0
      - `--per_device_train_batch_size`, `--gradient_accumulation_steps`
      - `--learning_rate`, `--num_train_epochs`
      - `--output_dir` (e.g., `output/${DATE}_key_cache_${output_suffix}`)
-     - `--dataset_mixer_list` (e.g., `WhenceFade/0601_key_cache_dynamic_olmoe 1.0`), specifying the training dataset and its sampling proportion.
+     - `--dataset_mixer_list` (e.g., `Anonymous/keylogging_dataset 1.0`), specifying the training dataset and its sampling proportion.
 
 ### 2. Executing the Fine-tuning Process
    Submit the script to the SLURM scheduler:

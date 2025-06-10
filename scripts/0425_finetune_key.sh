@@ -1,13 +1,11 @@
 #!/bin/bash
-#SBATCH --account=kempner_mzitnik_lab -p kempner_h100
+#SBATCH --account=XXX -p YYY
 #SBATCH -c 64
 #SBATCH --gres=gpu:nvidia_h100_80gb_hbm3:4
 #SBATCH -t 2-23:59
 #SBATCH --mem=800G
 #SBATCH -o logs/slurm_key_cache/%A_%a_%j.out
 #SBATCH -e logs/slurm_key_cache/%A_%a_%j.err
-#SBATCH --mail-user=mufan@cs.unc.edu
-#SBATCH --mail-type=FAIL
 #SBATCH --array=0,4
 
 set -exo pipefail

@@ -1,13 +1,11 @@
 #!/bin/bash
-#SBATCH --account=kempner_mzitnik_lab -p kempner_h100
+#SBATCH --account=XXX -p YYY
 #SBATCH -c 16
 #SBATCH --gres=gpu:nvidia_h100_80gb_hbm3:1
 #SBATCH -t 1-00:05
 #SBATCH --mem=200G
 #SBATCH -o logs/slurm_benchmark_key/%j_%A_%a.out
 #SBATCH -e logs/slurm_benchmark_key/%j_%A_%a.err
-#SBATCH --mail-user=mufan@cs.unc.edu
-#SBATCH --mail-type=FAIL
 #SBATCH --array=0,1,5-10
 
 # SLURM_ARRAY_TASK_ID=0 bash 0424_evaluate_key.sh

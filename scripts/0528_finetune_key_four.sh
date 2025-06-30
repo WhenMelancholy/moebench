@@ -1,6 +1,8 @@
 #!/bin/bash
 #SBATCH --account=kempner_mzitnik_lab -p kempner_h100
 #SBATCH -c 64
+#SBATCH --nodes=2
+#SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:nvidia_h100_80gb_hbm3:4
 #SBATCH -t 2-23:59
 #SBATCH --mem=800G
@@ -9,13 +11,14 @@
 #SBATCH --mail-user=mufan@cs.unc.edu
 #SBATCH --mail-type=FAIL
 #SBATCH --array=0,4
+#SBATCH --array=1,2%1
 
 set -exo pipefail
 
 cd /n/home08/zkong/mufan/tmp/moebench/open-instruct/
 [ -z "$SLURM_ARRAY_TASK_ID" ] && SLURM_ARRAY_TASK_ID=4
 
-DATE=0425
+DATE=0528
 NUM_GPUS=4
 BATCH_SIZE_PER_GPU=1
 TOTAL_BATCH_SIZE=128
@@ -41,18 +44,32 @@ output_suffixs=(
 model_name=${model_names[$SLURM_ARRAY_TASK_ID]}
 output_suffix=${output_suffixs[$SLURM_ARRAY_TASK_ID]}
 
-accelerate launch \
+export MASTER_ADDR=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1)
+export MASTER_PORT=$((RANDOM % (50000 - 30000 + 1) + 30000))
+export NUM_PROCESSES=$(($SLURM_NNODES * 4))
+echo MASTER_ADDR: $MASTER_ADDR
+echo MASTER_PORT: $MASTER_PORT
+
+srun --label \
+    --export=ALL \
+    --ntasks=${SLURM_NTASKS} \
+    --ntasks-per-node=${SLURM_NTASKS_PER_NODE} \
+    accelerate launch \
+    --multi_gpu \
+    --machine_rank $SLURM_PROCID \
+    --num_processes $NUM_PROCESSES \
+    --num_machines $SLURM_NNODES \
+    --dynamo_backend no \
+    --main_process_ip $MASTER_ADDR \
+    --main_process_port $MASTER_PORT \
+    --rdzv_backend c10d \
     --mixed_precision bf16 \
-    --num_machines 1 \
-    --num_processes $NUM_GPUS \
-    --use_deepspeed \
-    --deepspeed_config_file configs/ds_configs/stage3_no_offloading_accelerate.conf \
     open_instruct/finetune.py \
     --model_name_or_path ${model_name} \
     --tokenizer_name ${model_name} \
     --use_flash_attn \
     --max_seq_length 2048 \
-    --preprocessing_num_workers 128 \
+    --preprocessing_num_workers 64 \
     --per_device_train_batch_size $BATCH_SIZE_PER_GPU \
     --gradient_accumulation_steps $GRADIENT_ACC_STEPS \
     --learning_rate 2e-05 \
@@ -71,6 +88,9 @@ accelerate launch \
     --no_push_to_hub \
     --no_use_slow_tokenizer \
     --no_try_launch_beaker_eval_jobs \
-    --dataset_mixer_list WhenceFade/0424_key_cache_dynamic_olmoe 1.0 \
+    --dataset_mixer_list WhenceFade/0528_key_cache_dynamic_olmoe 1.0 \
     --freeze_strategy none \
     --add_bos
+
+# --use_deepspeed \
+# --deepspeed_config_file configs/ds_configs/stage3_no_offloading_accelerate.conf \

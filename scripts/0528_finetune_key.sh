@@ -9,6 +9,7 @@
 #SBATCH --mail-user=mufan@cs.unc.edu
 #SBATCH --mail-type=FAIL
 #SBATCH --array=0,4
+#SBATCH --array=0,
 
 set -exo pipefail
 
@@ -52,7 +53,7 @@ accelerate launch \
     --tokenizer_name ${model_name} \
     --use_flash_attn \
     --max_seq_length 2048 \
-    --preprocessing_num_workers 128 \
+    --preprocessing_num_workers 64 \
     --per_device_train_batch_size $BATCH_SIZE_PER_GPU \
     --gradient_accumulation_steps $GRADIENT_ACC_STEPS \
     --learning_rate 2e-05 \
@@ -71,6 +72,6 @@ accelerate launch \
     --no_push_to_hub \
     --no_use_slow_tokenizer \
     --no_try_launch_beaker_eval_jobs \
-    --dataset_mixer_list WhenceFade/0424_key_cache_dynamic_olmoe 1.0 \
+    --dataset_mixer_list WhenceFade/0528_key_cache_dynamic_olmoe 1.0 \
     --freeze_strategy none \
     --add_bos

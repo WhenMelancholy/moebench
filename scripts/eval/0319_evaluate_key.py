@@ -32,6 +32,7 @@ class CLIArgument:
     input_path: str = "results/key/last.jsonl"
     model_path: str = "output/0307_key_olmo/"
     output_path: str = "results/key/last.jsonl"
+    num_samples: int = 4096
 
 
 config = tyro.cli(CLIArgument)
@@ -63,6 +64,9 @@ if "llama" in config.model_path:
 # %%
 results = []
 input_data = open(config.input_path, "r").readlines()
+if config.num_samples is not None and config.num_samples > 0:
+    input_data = input_data[: config.num_samples]
+print(f"input data size: {len(input_data)}")
 for index, item in tqdm(
     enumerate(input_data), total=len(input_data), desc="Generating"
 ):
@@ -87,7 +91,7 @@ for index, item in tqdm(
     with torch.no_grad():
         outputs = model.generate(
             tokenized_chat,
-            max_new_tokens=2048,
+            max_new_tokens=50,
             output_scores=True,
             return_dict_in_generate=True,
             no_repeat_ngram_size=2,

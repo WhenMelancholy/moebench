@@ -19,20 +19,12 @@ def avg(lst):
 
 
 model_dirs = (
-    "./output/0416_lima_safe_deepseek_none/epoch_3",
-    "./output/0416_lima_safe_deepseek_expert/epoch_3",
-    "./output/0416_lima_safe_deepseek_router/epoch_3",
-    "./output/0416_lima_safe_deepseek_none_none_expert_expert/epoch_3",
-    "./output/0416_lima_safe_deepseek_none_none_router_router/epoch_3",
-    "./output/0416_lima_safe_deepseek_expert_expert_none_none/epoch_3",
-    "./output/0416_lima_safe_deepseek_expert_expert_router_router/epoch_3",
-    "./output/0416_lima_safe_deepseek_router_router_none_none/epoch_3",
-    "./output/0416_lima_safe_deepseek_router_router_expert_expert/epoch_3",
-    "./output/0423_lima_safe_deepseek_1e-5/epoch_3",
-    "./output/0423_lima_safe_deepseek_2e-5/epoch_3",
-    "./output/0423_lima_safe_deepseek_2e-6/epoch_3",
-    "./output/0423_lima_safe_deepseek_4e-6/epoch_3",
-    "./output/0423_lima_safe_deepseek_5e-6/epoch_3",
+    "/n/home08/zkong/mufan/tmp/moebench/moe-on-3d-gpu/outputs.bak/0430_1of7_shared1/checkpoint-50000",
+    "/n/home08/zkong/mufan/tmp/moebench/moe-on-3d-gpu/outputs.bak/0430_2of8_shared0/checkpoint-50000",
+    "/n/home08/zkong/mufan/tmp/moebench/moe-on-3d-gpu/outputs.bak/0430_3of15_shared1/checkpoint-50000",
+    "/n/home08/zkong/mufan/tmp/moebench/moe-on-3d-gpu/outputs.bak/0430_4of16_shared0/checkpoint-50000",
+    "/n/home08/zkong/mufan/tmp/moebench/moe-on-3d-gpu/outputs.bak/0430_7of31_shared1/checkpoint-50000",
+    "/n/home08/zkong/mufan/tmp/moebench/moe-on-3d-gpu/outputs.bak/0430_8of32_shared0/checkpoint-50000",
 )
 
 all_numbers = []
@@ -45,10 +37,14 @@ for model_dir in model_dirs:
         row = {}
 
         exp_str = model_dir.split("/")[-2]
-        topk_expert = 8
-        total_expert = 64
+        topk_expert = int(exp_str.split("_")[1].split("of")[0])
+        total_expert = int(exp_str.split("_")[1].split("of")[1])
+        print("topk_expert", topk_expert)
+        print("total_expert", total_expert)
 
-        exp_name = exp_str
+        exp_name = f"{topk_expert}of{total_expert}"
+        if "shared1" in exp_str:
+            exp_name += "_shared"
 
         # %%
         def find_latest_json_file(directory):
@@ -237,6 +233,7 @@ for model_dir in model_dirs:
         print()
         all_numbers.append(numbers)
     except Exception as e:
+        traceback.print_exc()
         print(f"Error processing {model_dir}: {e}")
         continue
 

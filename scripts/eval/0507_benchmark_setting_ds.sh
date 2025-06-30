@@ -7,8 +7,8 @@
 #SBATCH -o logs/slurm_benchmark_deepseek/%j_%A_%a.out
 #SBATCH -e logs/slurm_benchmark_deepseek/%j_%A_%a.err
 #SBATCH --mail-user=mufan@cs.unc.edu
-#SBATCH --mail-type=FAIL
-#SBATCH --array=0,1,2,9,12,14,10,11,13
+#SBATCH --mail-type=FAIL,END
+#SBATCH --array=0,1,2,9,12,14,10,11,13%2
 #------------------------------
 
 set -e
@@ -48,7 +48,7 @@ mkdir -p results/prune
 model_dir=0416_lima_safe_deepseek_${setting}/epoch_3
 lm_eval --model hf \
     --model_args pretrained=./output/${model_dir},trust_remote_code=True,random_router=False,save_router_logits="output/${model_dir}/baseline.pt" \
-    --tasks winogrande,mmlu,piqa,arc_challenge,arc_easy,truthfulqa_mc1,truthfulqa_mc2 \
+    --tasks winogrande,mmlu,piqa,arc_challenge,arc_easy,truthfulqa_mc1,truthfulqa_mc2,nq_open \
     --batch_size auto \
     --output_path ./results/baseline \
     --wandb_args project=lm-eval-olmoe \

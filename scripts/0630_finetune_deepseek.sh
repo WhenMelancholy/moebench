@@ -15,7 +15,7 @@ conda activate olmo
 set -eo pipefail
 set -x
 
-[ -z "$SLURM_ARRAY_TASK_ID" ] && SLURM_ARRAY_TASK_ID=11
+[ -z "$SLURM_ARRAY_TASK_ID" ] && SLURM_ARRAY_TASK_ID=0
 
 DATE=0630
 MODEL_SIZE=7B
@@ -50,7 +50,7 @@ accelerate launch \
     --chat_template_name output/deepseek-moe-16b-chat \
     --trust_remote_code \
     --use_flash_attn \
-    --max_seq_length 2048 \
+    --max_seq_length 1024 \
     --preprocessing_num_workers 16 \
     --per_device_train_batch_size $BATCH_SIZE_PER_GPU \
     --gradient_accumulation_steps $GRADIENT_ACC_STEPS \
@@ -59,11 +59,11 @@ accelerate launch \
     --warmup_ratio 0.03 \
     --weight_decay 0.0 \
     --num_train_epochs 2 \
-    --output_dir output/${DATE}_lima_safe_deepseek_sl2048_${setting} \
+    --output_dir output/${DATE}_lima_safe_deepseek_sl1024_${setting} \
     --with_tracking \
     --report_to wandb \
     --logging_steps 1 \
-    --reduce_loss sum \
+    --reduce_loss mean \
     --model_revision main \
     --checkpointing_steps epoch \
     --no_push_to_hub \

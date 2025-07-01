@@ -31,6 +31,7 @@ from datasets.builder import DatasetGenerationError
 from dateutil import parser
 from huggingface_hub import HfApi
 from rich.pretty import pprint
+
 from transformers import MODEL_FOR_CAUSAL_LM_MAPPING, HfArgumentParser
 
 MODEL_CONFIG_CLASSES = list(MODEL_FOR_CAUSAL_LM_MAPPING.keys())
@@ -778,6 +779,19 @@ def clean_last_n_checkpoints(output_dir: str, keep_last_n_checkpoints: int) -> N
             logger.info(f"Removing checkpoint {checkpoint}")
             shutil.rmtree(os.path.join(output_dir, checkpoint))
     logger.info("Remaining files:" + str(os.listdir(output_dir)))
+
+
+def clean_optim_states(output_dir: str) -> None:
+    # remove the last checkpoint to save space
+    folders = [f for f in os.listdir(output_dir) if is_checkpoint_folder(output_dir, f)]
+    # find the checkpoint with the largest step
+    checkpoints = sorted(folders, key=lambda x: int(x.split("_")[-1]))
+    for checkpoint in checkpoints:
+        optim_state_path = os.path.join(output_dir, checkpoint, "pytorch_model")
+        if os.path.exists(optim_state_path):
+            logger.info(f"Removing optimizer states from checkpoint {checkpoint}")
+            shutil.rmtree(optim_state_path)
+    logger.info("Removed optimizer states from all checkpoints.")
 
 
 # ----------------------------------------------------------------------------

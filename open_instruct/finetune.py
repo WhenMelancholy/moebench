@@ -41,6 +41,7 @@ from open_instruct.model_utils import push_folder_to_hub, save_with_accelerate
 from open_instruct.utils import (
     ArgumentParserPlus,
     clean_last_n_checkpoints,
+    clean_optim_states,
     get_last_checkpoint_path,
     get_wandb_tags,
     is_beaker_job,
@@ -1056,6 +1057,7 @@ def main(args: FlatArguments):
         clean_last_n_checkpoints(
             args.output_dir, keep_last_n_checkpoints=args.keep_last_n_checkpoints
         )
+        clean_optim_states(args.output_dir)
 
     if (
         args.try_auto_save_to_beaker
